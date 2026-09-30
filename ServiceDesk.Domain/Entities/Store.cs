@@ -19,9 +19,13 @@ public class Store
         if (string.IsNullOrWhiteSpace(city))
             throw new ArgumentException("City is required.", nameof(city));
 
+        if (string.IsNullOrWhiteSpace(address))
+            throw new ArgumentException("Address is required.", nameof(address));
+
         StoreCode = storeCode;
         Name = name;
         City = city;
+        Address = address;
     }
 
 }

@@ -6,6 +6,89 @@ namespace ServiceDesk.Tests;
 public class SupportTicketTests
 {
     [Fact]
+    public void Empty_title_throws_ArgumentException()
+    {
+        // Arrange Act and Assert
+        Assert.Throws<ArgumentException>(() => new SupportTicket(
+           "",
+           "The POS terminal does not turn on.",
+           1,
+           1,
+           1,
+           TicketPriority.High));
+
+
+    }
+
+    [Fact]
+    public void Empty_description_throws_ArgumentException()
+    {
+        // Assert
+        Assert.Throws<ArgumentException>(() => new SupportTicket(
+            "POS not working",
+            "",
+            1,
+            1,
+            1,
+
+            TicketPriority.High));
+
+
+    }
+    [Fact]
+    public void Ticket_with_invalid_createdbyuserid_throws_exception()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new SupportTicket(
+                "POS not working",
+                "The POS terminal does not turn on.",
+                0,
+                1,
+                1,
+
+                TicketPriority.High));
+    }
+    [Fact]
+
+    public void Ticket_with_invalid_categoryid_throws_exception()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new SupportTicket(
+                "POS not working",
+                "The POS terminal does not turn on.",
+                1,
+                1,
+                0,
+
+                TicketPriority.High));
+    }
+    [Fact]
+    public void Ticket_with_invalid_store_id_throws_exception()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new SupportTicket(
+                "POS not working",
+                "The POS terminal does not turn on.",
+                1,
+                1,
+                0,
+                TicketPriority.High));
+    }
+
+    [Fact]
+    public void Ticket_with_invalid_priority_throws_exception()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new SupportTicket(
+                "POS not working",
+                "The POS terminal does not turn on.",
+                1,
+                1,
+                1,
+                (TicketPriority)99));
+    }
+
+    [Fact]
     public void New_ticket_starts_awaiting_approval()
     {
         //Arrange
@@ -15,7 +98,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High
         );
         //Act
@@ -35,7 +118,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High
         );
         //Act
@@ -54,7 +137,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High);
 
         ticket.Approve();
@@ -74,7 +157,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High);
 
         // Act
@@ -98,7 +181,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High);
 
         // Act and Assert
@@ -115,7 +198,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High);
 
         ticket.Reject();
@@ -134,7 +217,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High);
         ticket.Approve();
 
@@ -152,7 +235,7 @@ public class SupportTicketTests
             1,
             1,
             1,
-            1,
+
             TicketPriority.High);
 
         ticket.Approve();
@@ -161,40 +244,11 @@ public class SupportTicketTests
         ticket.Resolve();
         ticket.Close();
         // Act and Assert
+
         Assert.Throws<InvalidOperationException>(() =>
             ticket.Close());
     }
-    [Fact]
-    public void Empty_title_throws_ArgumentException()
-    {
-        // Arrange Act and Assert
-        Assert.Throws<ArgumentException>(() => new SupportTicket(
-           "",
-           "The POS terminal does not turn on.",
-           1,
-           1,
-           1,
-           1,
-           TicketPriority.High));
 
-
-    }
-
-    [Fact]
-    public void Empty_description_throws_ArgumentException()
-    {
-        // Assert
-        Assert.Throws<ArgumentException>(() => new SupportTicket(
-            "POS not working",
-            "",
-            1,
-            1,
-            1,
-            1,
-            TicketPriority.High));
-
-
-    }
 
 
 

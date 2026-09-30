@@ -12,8 +12,6 @@ public class User
 
     public string Email { get; private set; } = string.Empty;
 
-    public int DepartmentId { get; private set; }
-
     public string PhoneNumber { get; private set; } = string.Empty;
     public UserRole Role { get; private set; }
     public int? StoreId { get; private set; }

@@ -10,24 +10,31 @@ public class SupportTicket
     public TicketPriority Priority { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public int CreatedByUserId { get; private set; }
-    public int DepartmentId { get; private set; }
     public int CategoryId { get; private set; }
     public int StoreId { get; private set; }
     public int? AssetId { get; private set; }
 
 
-    public SupportTicket(string title, string description, int createdByUserId, int departmentId, int categoryId, int storeId,
+    public SupportTicket(string title, string description, int createdByUserId, int categoryId, int storeId,
     TicketPriority priority)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new ArgumentException("Title is required.", nameof(title));
         if (string.IsNullOrWhiteSpace(description))
             throw new ArgumentException("Description is required.", nameof(description));
+        if (createdByUserId <= 0)
+            throw new ArgumentException("A valid creator user is required.", nameof(createdByUserId));
+        if (storeId <= 0)
+            throw new ArgumentException("A storeId is required.", nameof(storeId));
+        if (categoryId <= 0)
+            throw new ArgumentException("A categoryId is required.", nameof(categoryId));
+
+        if (!Enum.IsDefined(typeof(TicketPriority), priority))
+            throw new ArgumentException("Invalid ticket priority.", nameof(priority));
 
         Title = title;
         Description = description;
         CreatedByUserId = createdByUserId;
-        DepartmentId = departmentId;
         StoreId = storeId;
         CategoryId = categoryId;
         Priority = priority;
