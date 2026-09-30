@@ -1,0 +1,12 @@
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/bin/Debug/net10.0/ServiceDesk.Domain.deps.json
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/bin/Debug/net10.0/ServiceDesk.Domain.dll
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/bin/Debug/net10.0/ServiceDesk.Domain.pdb
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.GeneratedMSBuildEditorConfig.editorconfig
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.AssemblyInfoInputs.cache
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.AssemblyInfo.cs
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.csproj.CoreCompileInputs.cache
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.sourcelink.json
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.dll
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/refint/ServiceDesk.Domain.dll
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ServiceDesk.Domain.pdb
+/Users/anafaperinkadakkat/Developer/Personal/service-desk-system/ServiceDesk.Domain/obj/Debug/net10.0/ref/ServiceDesk.Domain.dll
