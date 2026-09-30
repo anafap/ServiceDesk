@@ -51,11 +51,29 @@ app.MapGet("/api/tickets", async (
 });
 
 
-app.MapPost("/api/tickets/{ticketId:int}/approve", async (
+app.MapPost("/api/tickets/{ticketId:int}/approve", async Task<IResult> (
     int ticketId, TicketService ticketService) =>
 {
-    await ticketService.ApproveTicketAsync(ticketId);
-    return Results.NoContent();
+    try
+    {
+        await ticketService.ApproveTicketAsync(ticketId);
+        return Results.NoContent();
+    }
+    catch (KeyNotFoundException exception)
+    {
+        return Results.NotFound(new
+        {
+            message = exception.Message
+        });
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Conflict(new
+        {
+            message = exception.Message
+        });
+    }
+
 
 });
 
