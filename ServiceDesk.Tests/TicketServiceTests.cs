@@ -317,6 +317,14 @@ public class TicketServiceTests
             AddedTicket = ticket;
             return Task.CompletedTask;
         }
+        public Task<List<SupportTicket>> GetAllAsync()
+        {
+            var tickets = _ticket is not null
+                          ? new List<SupportTicket> { _ticket }
+                          : new List<SupportTicket>();
+            return Task.FromResult(tickets);
+        }
+
 
     }
 
