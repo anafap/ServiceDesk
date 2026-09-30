@@ -6,4 +6,5 @@ public interface ISupportTicketRepository
 {
     Task<SupportTicket?> GetByIdAsync(int ticketId);
     Task SaveAsync(SupportTicket ticket);
+    Task AddAsync(SupportTicket ticket);
 }

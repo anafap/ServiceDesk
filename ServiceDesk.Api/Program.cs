@@ -1,41 +1,46 @@
+using Microsoft.EntityFrameworkCore;
+using ServiceDesk.Application.Interfaces;
+using ServiceDesk.Application.Services;
+using ServiceDesk.Infrastructure;
+using ServiceDesk.Infrastructure.Repositories;
+using ServiceDesk.Domain.Enums;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddScoped<ISupportTicketRepository, SupportTicketRepository>();
+builder.Services.AddDbContext<ServiceDeskDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<ITechnicianAssignmentRepository, TechnicianAssignmentRepository>();
+builder.Services.AddScoped<TicketService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.MapPost("/api/tickets", async (
+    CreateTicketRequest request,
+    TicketService ticketService) =>
 {
-    app.MapOpenApi();
-}
+    var ticket = await ticketService.CreateTicketAsync(
+        request.Title,
+        request.Description,
+        request.CreatedByUserId,
+        request.CategoryId,
+        request.StoreId,
+        request.Priority
+    );
+    return Results.Created($"/api/tickets/{ticket.Id}", ticket);
 
-app.UseHttpsRedirection();
+});
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+public record CreateTicketRequest(
+    string Title,
+    string Description,
+    int CreatedByUserId,
+    int CategoryId,
+    int StoreId,
+    TicketPriority Priority
+
+);
+

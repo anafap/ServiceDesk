@@ -102,6 +102,21 @@ Contains unit tests for domain rules and application tests for use cases. Integr
 8. Add preventive-maintenance scheduling, dashboards, reports, and audit views.
 9. Add API integration tests, documentation, seed data, and deployment instructions.
 
+## Current progress
+
+The current implementation has completed the domain foundation and the first persistence wiring step.
+
+- Domain entities and ticket lifecycle rules are implemented.
+- Domain and application tests cover the main ticket workflow.
+- `TicketService` contains create, approve, reject, assign, progress, resolve, and close use cases.
+- `ServiceDeskDbContext` and EF Core entity configurations are present.
+- `SupportTicketRepository` is implemented.
+- SQL Server connection configuration is present in `ServiceDesk.Api/appsettings.json`.
+- Dependency injection currently registers the database context and support-ticket repository.
+- The solution builds successfully and the API launches on the configured development URL.
+
+The next guided coding step is to expose the first ticket API endpoint. This will be implemented incrementally and explained before each change.
+
 ## Development commands
 
 ```bash
@@ -113,3 +128,5 @@ dotnet run --project ServiceDesk.Api
 ## Status
 
 🚧 In development
+
+See [`roadmap.local.md`](roadmap.local.md) for the learning roadmap and the remaining project flow.
