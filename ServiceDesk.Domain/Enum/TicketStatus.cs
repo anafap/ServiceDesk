@@ -1,8 +1,11 @@
 namespace ServiceDesk.Domain.Enums;
 public enum TicketStatus
 {
-    Open =1,
-    InProgress =2,
-    Resolved =3,
-    Closed =4
+    AwaitingApproval = 1,
+    Approved = 2,
+    Assigned = 3,
+    InProgress = 4,
+    Resolved = 5,
+    Closed = 6,
+    Rejected = 7
 }

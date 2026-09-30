@@ -31,24 +31,58 @@ public class SupportTicket
         StoreId = storeId;
         CategoryId = categoryId;
         Priority = priority;
-        Status = TicketStatus.Open;
+        Status = TicketStatus.AwaitingApproval;
         CreatedAt = DateTime.UtcNow;
 
 
 
 
     }
-    public void StartProgress()
+
+
+    public void Approve()
     {
-        if (Status != TicketStatus.Open)
+        if (Status != TicketStatus.AwaitingApproval)
         {
             throw new InvalidOperationException(
-                "Only open tickets can be moved to in progress.");
+                "Only awaiting-approval tickets can be approved.");
+        }
+
+        Status = TicketStatus.Approved;
+    }
+
+    public void Reject()
+    {
+        if (Status != TicketStatus.AwaitingApproval)
+        {
+            throw new InvalidOperationException(
+                "Only AwaitingApproval tickets can be rejected.");
+        }
+
+        Status = TicketStatus.Rejected;
+    }
+
+
+    public void Assign()
+    {
+        if (Status != TicketStatus.Approved)
+        {
+            throw new InvalidOperationException(
+                "Only Approved tickets can be assigned.");
+        }
+
+        Status = TicketStatus.Assigned;
+    }
+    public void StartProgress()
+    {
+        if (Status != TicketStatus.Assigned)
+        {
+            throw new InvalidOperationException(
+                "Only assigned tickets can be moved to in progress.");
         }
 
         Status = TicketStatus.InProgress;
     }
-
     public void Resolve()
     {
         if (Status != TicketStatus.InProgress)
@@ -59,13 +93,12 @@ public class SupportTicket
 
         Status = TicketStatus.Resolved;
     }
-
     public void Close()
     {
         if (Status != TicketStatus.Resolved)
         {
             throw new InvalidOperationException(
-                "Only resolved tickets can be closed.");
+                "Only Resolved tickets can be closed.");
         }
 
         Status = TicketStatus.Closed;
