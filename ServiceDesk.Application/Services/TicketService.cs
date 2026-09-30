@@ -108,4 +108,11 @@ public class TicketService
         await _ticketRepository.SaveAsync(ticket);
     }
 
+    public async Task<List<SupportTicket>> GetAllTicketsAsync()
+    {
+        return await _ticketRepository.GetAllAsync();
+    }
+
+
 }
+

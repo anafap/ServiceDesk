@@ -32,6 +32,24 @@ app.MapPost("/api/tickets", async (
 });
 
 
+app.MapGet("/api/tickets", async (
+    TicketService ticketService) =>
+{
+    var tickets = await ticketService.GetAllTicketsAsync();
+
+    return Results.Ok(tickets);
+
+});
+
+
+app.MapPost("/api/tickets/{ticketId:int}/approve", async (
+    int ticketId, TicketService ticketService) =>
+{
+    await ticketService.ApproveTicketAsync(ticketId);
+    return Results.NoContent();
+
+});
+
 app.Run();
 
 public record CreateTicketRequest(

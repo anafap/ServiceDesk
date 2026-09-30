@@ -30,5 +30,10 @@ public class SupportTicketRepository : ISupportTicketRepository
         _dbContext.SupportTickets.Update(ticket);
         await _dbContext.SaveChangesAsync();
     }
+
+    public async Task<List<SupportTicket>> GetAllAsync()
+    {
+        return await _dbContext.SupportTickets.OrderByDescending(ticket => ticket.CreatedAt).ToListAsync();
+    }
 }
 
