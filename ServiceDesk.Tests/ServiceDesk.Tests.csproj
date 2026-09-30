@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ServiceDesk.Domain\ServiceDesk.Domain.csproj" />
+    <ProjectReference Include="..\ServiceDesk.Application\ServiceDesk.Application.csproj" />
   </ItemGroup>
 
 </Project>
