@@ -8,8 +8,7 @@ namespace ServiceDesk.Tests;
 public class TicketServiceTests
 {
     [Fact]
-    public async Task
-    ApproveTicketAsync_approves_and_saves_ticket()
+    public async Task ApproveTicketAsync_approves_and_saves_ticket()
     {
         var ticket = new SupportTicket(
             "POS issue",
@@ -30,8 +29,7 @@ public class TicketServiceTests
     }
 
     [Fact]
-    public async Task
-    ApproveTicketAsync_throws_when_ticket_is_not_found()
+    public async Task ApproveTicketAsync_throws_when_ticket_is_not_found()
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
@@ -41,11 +39,8 @@ public class TicketServiceTests
             service.ApproveTicketAsync(ticketId: 99));
     }
 
-
-
     [Fact]
-    public async Task
-    RejectTicketAsync_rejects_and_saves_ticket()
+    public async Task RejectTicketAsync_rejects_and_saves_ticket()
     {
         var ticket = new SupportTicket(
             "POS issue",
@@ -66,8 +61,7 @@ public class TicketServiceTests
     }
 
     [Fact]
-    public async Task
-    RejectTicketAsync_throws_when_ticket_is_not_found()
+    public async Task RejectTicketAsync_throws_when_ticket_is_not_found()
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
@@ -77,8 +71,7 @@ public class TicketServiceTests
             service.RejectTicketAsync(ticketId: 99));
     }
     [Fact]
-    public async Task
-    RejectTicketAsync_throws_when_ticket_already_approved()
+    public async Task RejectTicketAsync_throws_when_ticket_already_approved()
     {
         var ticket = new SupportTicket(
             "POS issue",
@@ -143,6 +136,58 @@ public class TicketServiceTests
         Assert.Equal(TicketStatus.Assigned, ticket.Status);
         Assert.True(repository.WasSaved);
         Assert.NotNull(assignmentRepository.AddedAssignment);
+    }
+
+
+    [Fact]
+    public async Task AssignTicketAsync_throws_when_ticket_is_not_approved()
+    {
+        var ticket = new SupportTicket(
+            "POS issue",
+            "POS is not working",
+            1,
+            1,
+            1,
+            TicketPriority.High);
+
+        var repository = new FakeTicketRepository(ticket);
+        var assignmentRepository = new FakeTechnicianAssignmentRepository();
+        var service = new TicketService(repository, assignmentRepository);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        service.AssignTicketAsync(
+            ticketId: 1,
+            externaltechnicianId: 2,
+            assignedByUserId: 3,
+            scheduledAt: DateTime.UtcNow.AddDays(1),
+            notes: "Bring replacement POS terminal"
+        ));
+    }
+
+    [Fact]
+    public async Task AssignTicketAsync_throws_when_schedule_is_in_the_past()
+    {
+        var ticket = new SupportTicket(
+            "POS issue",
+            "POS is not working",
+            1,
+            1,
+            1,
+            TicketPriority.High);
+        ticket.Approve();
+
+        var repository = new FakeTicketRepository(ticket);
+        var assignmentRepository = new FakeTechnicianAssignmentRepository();
+        var service = new TicketService(repository, assignmentRepository);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+        service.AssignTicketAsync(
+            ticketId: 1,
+            externaltechnicianId: 2,
+            assignedByUserId: 3,
+            scheduledAt: DateTime.UtcNow.AddDays(-1),
+            notes: "Invalid appointments"
+        ));
     }
     [Fact]
     public async Task StartProgressTicketAsync_moves_assigned_ticket_to_in_progress()
@@ -225,10 +270,9 @@ public class TicketServiceTests
         Assert.Equal(TicketStatus.Resolved, ticket.Status);
         Assert.True(repository.WasSaved);
     }
-
-
     [Fact]
     public async Task ResolveTicketAsync_throws_when_ticket_is_not_in_progress()
+
     {
         // Arrange
         var ticket = new SupportTicket(
@@ -250,8 +294,6 @@ public class TicketServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.ResolveTicketAsync(ticketId: 1));
     }
-
-
     [Fact]
     public async Task CloseTicketAsync_throws_when_ticket_is_not_found()
     {
@@ -290,14 +332,75 @@ public class TicketServiceTests
         Assert.True(repository.WasSaved);
     }
 
+    [Fact]
+    public async Task CloseTicketAsync_throws_when_ticket_is_not_resolved()
+    {
+        var ticket = new SupportTicket(
+            "POS issue",
+            "POS is not working",
+            1,
+            1,
+            1,
+            TicketPriority.High);
+
+        var repository = new FakeTicketRepository(ticket);
+        var assignmentRepository = new FakeTechnicianAssignmentRepository();
+        var service = new TicketService(repository, assignmentRepository);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        service.CloseTicketAsync(ticketId: 1));
+
+
+    }
+
+    [Fact]
+    public async Task TicketService_can_complete_full_workflow()
+    {
+        var repository = new FakeTicketRepository(ticket: null);
+        var assignmentRepository = new FakeTechnicianAssignmentRepository();
+        var service = new TicketService(repository, assignmentRepository);
+
+        var ticket = await service.CreateTicketAsync(
+            "POS issue",
+            "POS is not working",
+            createdByUserId: 1,
+            categoryId: 1,
+            storeId: 1,
+            TicketPriority.High);
+
+        repository.SetTicket(ticket);
+
+        await service.ApproveTicketAsync(ticketId: 1);
+
+        await service.AssignTicketAsync(
+            ticketId: 1,
+            externaltechnicianId: 2,
+            assignedByUserId: 3,
+            scheduledAt: DateTime.UtcNow.AddDays(1),
+            notes: "Bring replacement terminal");
+
+        await service.StartProgressTicketAsync(ticketId: 1);
+        await service.ResolveTicketAsync(ticketId: 1);
+        await service.CloseTicketAsync(ticketId: 1);
+
+        Assert.Equal(TicketStatus.Closed, ticket.Status);
+    }
+
+
+
     private class FakeTicketRepository : ISupportTicketRepository
     {
-        private readonly SupportTicket? _ticket;
+        private SupportTicket? _ticket;
 
         public bool WasSaved { get; private set; }
         public SupportTicket? AddedTicket { get; private set; }
 
         public FakeTicketRepository(SupportTicket? ticket)
+        {
+            _ticket = ticket;
+        }
+
+        public void SetTicket(SupportTicket? ticket)
         {
             _ticket = ticket;
         }
