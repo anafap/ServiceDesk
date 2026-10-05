@@ -20,9 +20,10 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
-        await service.ApproveTicketAsync(ticketId: 1);
+        await service.ApproveTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
         Assert.Equal(TicketStatus.Approved, ticket.Status);
         Assert.True(repository.WasSaved);
@@ -33,10 +34,12 @@ public class TicketServiceTests
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            service.ApproveTicketAsync(ticketId: 99));
+            service.ApproveTicketAsync(ticketId: 99, changedByUserId: 1, reason: ""));
     }
 
     [Fact]
@@ -52,9 +55,11 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
 
-        await service.RejectTicketAsync(ticketId: 1);
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
+
+        await service.RejectTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
         Assert.Equal(TicketStatus.Rejected, ticket.Status);
         Assert.True(repository.WasSaved);
@@ -65,10 +70,12 @@ public class TicketServiceTests
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            service.RejectTicketAsync(ticketId: 99));
+            service.RejectTicketAsync(ticketId: 99, changedByUserId: 1, reason: ""));
     }
     [Fact]
     public async Task RejectTicketAsync_throws_when_ticket_already_approved()
@@ -85,10 +92,13 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
+
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.RejectTicketAsync(ticketId: 1));
+            service.RejectTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
     }
 
     [Fact]
@@ -96,7 +106,10 @@ public class TicketServiceTests
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
+
 
         var ticket = await service.CreateTicketAsync(
             "POS issue",
@@ -124,14 +137,19 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await service.AssignTicketAsync(
             ticketId: 1,
             externaltechnicianId: 2,
             assignedByUserId: 3,
             scheduledAt: DateTime.UtcNow.AddDays(1),
-            notes: "Bring replacement POS terminal");
+            notes: "Bring replacement POS terminal",
+            changedByUserId: 1,
+            reason: ""
+            );
 
         Assert.Equal(TicketStatus.Assigned, ticket.Status);
         Assert.True(repository.WasSaved);
@@ -152,7 +170,9 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
         service.AssignTicketAsync(
@@ -160,7 +180,9 @@ public class TicketServiceTests
             externaltechnicianId: 2,
             assignedByUserId: 3,
             scheduledAt: DateTime.UtcNow.AddDays(1),
-            notes: "Bring replacement POS terminal"
+            notes: "Bring replacement POS terminal",
+            changedByUserId: 1,
+            reason: ""
         ));
     }
 
@@ -178,7 +200,9 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
         service.AssignTicketAsync(
@@ -186,7 +210,9 @@ public class TicketServiceTests
             externaltechnicianId: 2,
             assignedByUserId: 3,
             scheduledAt: DateTime.UtcNow.AddDays(-1),
-            notes: "Invalid appointments"
+            notes: "Invalid appointments",
+            changedByUserId: 1,
+            reason: ""
         ));
     }
     [Fact]
@@ -204,9 +230,11 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
 
-        await service.StartProgressTicketAsync(ticketId: 1);
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
+
+        await service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
         Assert.Equal(TicketStatus.InProgress, ticket.Status);
         Assert.True(repository.WasSaved);
@@ -227,10 +255,12 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartProgressTicketAsync(ticketId: 1));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
 
     }
     [Fact]
@@ -238,10 +268,12 @@ public class TicketServiceTests
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            service.StartProgressTicketAsync(ticketId: 99));
+            service.StartProgressTicketAsync(ticketId: 99, changedByUserId: 1, reason: ""));
     }
     [Fact]
     public async Task ResolveTicketAsync_moves_in_progress_ticket_to_resolved()
@@ -261,10 +293,11 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         // Act
-        await service.ResolveTicketAsync(ticketId: 1);
+        await service.ResolveTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
         // Assert
         Assert.Equal(TicketStatus.Resolved, ticket.Status);
@@ -288,11 +321,12 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         // Act and Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.ResolveTicketAsync(ticketId: 1));
+            service.ResolveTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
     }
     [Fact]
     public async Task CloseTicketAsync_throws_when_ticket_is_not_found()
@@ -300,11 +334,11 @@ public class TicketServiceTests
         // Arrange
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
-
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
         // Act and Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() =>
-            service.CloseTicketAsync(ticketId: 99));
+            service.CloseTicketAsync(ticketId: 99, changedByUserId: 1, reason: ""));
     }
 
     [Fact]
@@ -324,9 +358,10 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
-        await service.CloseTicketAsync(ticketId: 1);
+        await service.CloseTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
         Assert.Equal(TicketStatus.Closed, ticket.Status);
         Assert.True(repository.WasSaved);
@@ -345,10 +380,11 @@ public class TicketServiceTests
 
         var repository = new FakeTicketRepository(ticket);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-        service.CloseTicketAsync(ticketId: 1));
+        service.CloseTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
 
 
     }
@@ -358,7 +394,8 @@ public class TicketServiceTests
     {
         var repository = new FakeTicketRepository(ticket: null);
         var assignmentRepository = new FakeTechnicianAssignmentRepository();
-        var service = new TicketService(repository, assignmentRepository);
+        var historyRepository = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, assignmentRepository, historyRepository);
 
         var ticket = await service.CreateTicketAsync(
             "POS issue",
@@ -370,23 +407,68 @@ public class TicketServiceTests
 
         repository.SetTicket(ticket);
 
-        await service.ApproveTicketAsync(ticketId: 1);
+        await service.ApproveTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
         await service.AssignTicketAsync(
             ticketId: 1,
             externaltechnicianId: 2,
             assignedByUserId: 3,
             scheduledAt: DateTime.UtcNow.AddDays(1),
-            notes: "Bring replacement terminal");
+            notes: "Bring replacement terminal",
+            changedByUserId: 1,
+            reason: "");
 
-        await service.StartProgressTicketAsync(ticketId: 1);
-        await service.ResolveTicketAsync(ticketId: 1);
-        await service.CloseTicketAsync(ticketId: 1);
+        await service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
+        await service.ResolveTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
+        await service.CloseTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
+        Assert.Collection(historyRepository.Histories, history =>
+        {
+            Assert.Equal(TicketStatus.AwaitingApproval, history.PreviousStatus);
+            Assert.Equal(TicketStatus.Approved, history.NewStatus);
+        },
+        history =>
+        {
+            Assert.Equal(TicketStatus.Approved, history.PreviousStatus);
+            Assert.Equal(TicketStatus.Assigned, history.NewStatus);
+        },
+         history =>
+        {
+            Assert.Equal(TicketStatus.Assigned, history.PreviousStatus);
+            Assert.Equal(TicketStatus.InProgress, history.NewStatus);
+        },
+        history =>
+        {
+            Assert.Equal(TicketStatus.InProgress, history.PreviousStatus);
+            Assert.Equal(TicketStatus.Resolved, history.NewStatus);
+        },
+        history =>
+        {
+            Assert.Equal(TicketStatus.Resolved, history.PreviousStatus);
+            Assert.Equal(TicketStatus.Closed, history.NewStatus);
+        });
+
+        Assert.Equal(5, historyRepository.Histories.Count);
         Assert.Equal(TicketStatus.Closed, ticket.Status);
     }
 
+    private class FakeTicketStatusHistoryRepository : ITicketStatusHistoryRepository
+    {
+        public List<TicketStatusHistory> Histories { get; } = [];
+        public Task AddAsync(TicketStatusHistory history)
+        {
+            Histories.Add(history);
+            return Task.CompletedTask;
+        }
+        public Task<List<TicketStatusHistory>> GetByTicketId(int ticketId)
+        {
 
+
+            return Task.FromResult(Histories);
+
+        }
+
+    }
 
     private class FakeTicketRepository : ISupportTicketRepository
     {

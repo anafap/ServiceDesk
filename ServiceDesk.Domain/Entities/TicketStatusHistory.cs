@@ -1,4 +1,5 @@
 namespace ServiceDesk.Domain.Entities;
+
 using ServiceDesk.Domain.Enums;
 
 public class TicketStatusHistory
@@ -18,7 +19,7 @@ public class TicketStatusHistory
         if (supportTicketId <= 0)
             throw new ArgumentException("SupportTicketId is required.", nameof(supportTicketId));
         if (changedByUserId <= 0)
-            throw new ArgumentException("ChangedUserId is required.", nameof(changedByUserId));
+            throw new ArgumentException("ChangedByUserId is required.", nameof(changedByUserId));
         if (!Enum.IsDefined(typeof(TicketStatus), newStatus))
             throw new ArgumentException("Invalid new status.",
             nameof(newStatus));

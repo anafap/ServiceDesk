@@ -4,8 +4,7 @@ using ServiceDesk.Application.Services;
 using ServiceDesk.Infrastructure;
 using ServiceDesk.Infrastructure.Repositories;
 using ServiceDesk.Domain.Enums;
-using System.IO.Pipelines;
-using System.Security.Cryptography.X509Certificates;
+using ServiceDesk.Domain.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
@@ -15,6 +14,8 @@ builder.Services.AddScoped<ISupportTicketRepository, SupportTicketRepository>();
 builder.Services.AddDbContext<ServiceDeskDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<ITechnicianAssignmentRepository, TechnicianAssignmentRepository>();
+builder.Services.AddScoped<ITicketStatusHistoryRepository, TicketStatusHistoryRepository>();
+
 builder.Services.AddScoped<TicketService>();
 
 var app = builder.Build();
@@ -24,6 +25,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+//create
 app.MapPost("/api/tickets", async (
     CreateTicketRequest request,
     TicketService ticketService) =>
@@ -40,7 +42,7 @@ app.MapPost("/api/tickets", async (
 
 });
 
-
+//read all
 app.MapGet("/api/tickets", async (
     TicketService ticketService) =>
 {
@@ -50,13 +52,14 @@ app.MapGet("/api/tickets", async (
 
 });
 
-
+//approve
 app.MapPost("/api/tickets/{ticketId:int}/approve", async Task<IResult> (
-    int ticketId, TicketService ticketService) =>
+    int ticketId, TicketService ticketService,
+    ApproveTicketRequest request) =>
 {
     try
     {
-        await ticketService.ApproveTicketAsync(ticketId);
+        await ticketService.ApproveTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
         return Results.NoContent();
     }
     catch (KeyNotFoundException exception)
@@ -77,12 +80,13 @@ app.MapPost("/api/tickets/{ticketId:int}/approve", async Task<IResult> (
 
 });
 
+//reject
 app.MapPost("/api/tickets/{ticketId:int}/reject", async Task<IResult> (
-    int ticketId, TicketService ticketService) =>
+    int ticketId, TicketService ticketService, ApproveTicketRequest request) =>
 {
     try
     {
-        await ticketService.RejectTicketAsync(ticketId);
+        await ticketService.RejectTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
         return Results.NoContent();
     }
     catch (KeyNotFoundException exception)
@@ -101,6 +105,7 @@ app.MapPost("/api/tickets/{ticketId:int}/reject", async Task<IResult> (
     }
 });
 
+//assign
 app.MapPost("/api/tickets/{ticketId:int}/assign", async Task<IResult> (
     int ticketId,
     AssignTicketRequest request,
@@ -113,7 +118,9 @@ app.MapPost("/api/tickets/{ticketId:int}/assign", async Task<IResult> (
             request.ExternalTechnicianId,
             request.AssignedByUserId,
             request.ScheduledAt,
-            request.Notes
+            request.Notes,
+            request.ChangedByUserId,
+            request.Reason
         );
         return Results.NoContent();
     }
@@ -141,13 +148,15 @@ app.MapPost("/api/tickets/{ticketId:int}/assign", async Task<IResult> (
 
 });
 
+//progress
 app.MapPost("/api/tickets/{ticketId:int}/progress", async (
     int ticketId,
-    TicketService ticketService) =>
+    TicketService ticketService,
+    ApproveTicketRequest request) =>
 {
     try
     {
-        await ticketService.StartProgressTicketAsync(ticketId);
+        await ticketService.StartProgressTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
         return Results.NoContent();
     }
     catch (KeyNotFoundException exception)
@@ -174,13 +183,15 @@ app.MapPost("/api/tickets/{ticketId:int}/progress", async (
 
 });
 
+//resolve
 app.MapPost("/api/tickets/{ticketId:int}/resolve", async (
     int ticketId,
-    TicketService ticketService) =>
+    TicketService ticketService,
+    ApproveTicketRequest request) =>
 {
     try
     {
-        await ticketService.ResolveTicketAsync(ticketId);
+        await ticketService.ResolveTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
         return Results.NoContent();
     }
     catch (KeyNotFoundException exception)
@@ -207,13 +218,14 @@ app.MapPost("/api/tickets/{ticketId:int}/resolve", async (
 
 });
 
+//close
 app.MapPost("/api/tickets/{ticketId:int}/close", async (
     int ticketId,
-    TicketService ticketService) =>
+    TicketService ticketService, ApproveTicketRequest request) =>
 {
     try
     {
-        await ticketService.CloseTicketAsync(ticketId);
+        await ticketService.CloseTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
         return Results.NoContent();
     }
     catch (KeyNotFoundException exception)
@@ -239,6 +251,16 @@ app.MapPost("/api/tickets/{ticketId:int}/close", async (
     }
 
 });
+
+//get history
+app.MapGet("/api/tickets/{ticketId:int}/history", async (
+    int ticketId, TicketService ticketService) =>
+{
+    var histories = await ticketService.GetHistoryByTicketIdAsync(ticketId);
+    return Results.Ok(histories);
+}
+);
+
 
 
 app.Run();
@@ -257,8 +279,15 @@ public record AssignTicketRequest(
     int ExternalTechnicianId,
     int AssignedByUserId,
     string Notes,
-    DateTime ScheduledAt
+    DateTime ScheduledAt,
+    int ChangedByUserId,
+    string? Reason
 
+);
+
+public record ApproveTicketRequest(
+    int ChangedByUserId,
+    string? Reason
 );
 
 
