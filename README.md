@@ -104,18 +104,20 @@ Contains unit tests for domain rules and application tests for use cases. Integr
 
 ## Current progress
 
-The current implementation has completed the domain foundation and the first persistence wiring step.
+The current implementation has completed the domain foundation, persistence wiring, and the first ticket workflow API slice.
 
 - Domain entities and ticket lifecycle rules are implemented.
-- Domain and application tests cover the main ticket workflow.
+- Domain and application tests cover the main ticket workflow and status-history transitions.
 - `TicketService` contains create, approve, reject, assign, progress, resolve, and close use cases.
+- Ticket API endpoints exist for creation, listing, approval, rejection, assignment, progress, resolution, closing, and history retrieval.
+- Ticket status history records the previous status, new status, actor, time, and reason for workflow transitions.
 - `ServiceDeskDbContext` and EF Core entity configurations are present.
-- `SupportTicketRepository` is implemented.
+- `SupportTicketRepository`, `TechnicianAssignmentRepository`, and `TicketStatusHistoryRepository` are implemented.
 - SQL Server connection configuration is present in `ServiceDesk.Api/appsettings.json`.
-- Dependency injection currently registers the database context and support-ticket repository.
-- The solution builds successfully and the API launches on the configured development URL.
+- Dependency injection registers the database context, repositories, and `TicketService`.
+- The test suite currently passes with 33 tests.
 
-The next guided coding step is to expose the first ticket API endpoint. This will be implemented incrementally and explained before each change.
+The next guided coding step is to add API authentication and role-based authorization using JWT bearer tokens. This will be implemented incrementally and explained before each change.
 
 ## Development commands
 
