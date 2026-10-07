@@ -15,8 +15,11 @@ builder.Services.AddDbContext<ServiceDeskDbContext>(options => options.UseSqlSer
 
 builder.Services.AddScoped<ITechnicianAssignmentRepository, TechnicianAssignmentRepository>();
 builder.Services.AddScoped<ITicketStatusHistoryRepository, TicketStatusHistoryRepository>();
+builder.Services.AddScoped<IReferenceDataRepository, ReferenceRepository>();
 
 builder.Services.AddScoped<TicketService>();
+builder.Services.AddScoped<ReferenceService>();
+
 
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
@@ -259,6 +262,30 @@ app.MapGet("/api/tickets/{ticketId:int}/history", async (
     var histories = await ticketService.GetHistoryByTicketIdAsync(ticketId);
     return Results.Ok(histories);
 }
+);
+
+app.MapGet("/api/stores", async (
+    ReferenceService reference) =>
+    {
+        var stores = await reference.GetAllStoresAsync();
+        return Results.Ok(stores);
+    }
+
+);
+app.MapGet("/api/categories", async (
+    ReferenceService reference) =>
+    {
+        var categories = await reference.GetAllCategoriesAsync();
+        return Results.Ok(categories);
+    }
+
+); app.MapGet("/api/external-technicians", async (
+    ReferenceService reference) =>
+    {
+        var externaltechnicians = await reference.GetAllExternalAsync();
+        return Results.Ok(externaltechnicians);
+    }
+
 );
 
 
