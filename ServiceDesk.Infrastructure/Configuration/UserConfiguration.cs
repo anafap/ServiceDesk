@@ -41,6 +41,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Ignore(user => user.FullName);
 
+        builder.Property(user => user.PasswordHash).HasMaxLength(512).IsRequired(false);
+
 
     }
 }

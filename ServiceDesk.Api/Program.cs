@@ -5,6 +5,8 @@ using ServiceDesk.Infrastructure;
 using ServiceDesk.Infrastructure.Repositories;
 using ServiceDesk.Domain.Enums;
 using ServiceDesk.Domain.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
@@ -20,12 +22,38 @@ builder.Services.AddScoped<IReferenceDataRepository, ReferenceRepository>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<ReferenceService>();
 
+builder.Services.AddScoped<LoginService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+
 
 var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    var email = app.Configuration["DemoUser:Email"];
+    var password = app.Configuration["DemoUser:Password"];
+
+    if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ServiceDeskDbContext>();
+        var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+        if (user is null)
+        {
+            user = new User("Demo", "Admin", email, "00000000", UserRole.Admin, storeId: null);
+            db.Users.Add(user);
+        }
+        if (string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            user.SetPasswordHash(hasher.HashPassword(user, password));
+            await db.SaveChangesAsync();
+        }
+    }
 }
 
 //create
@@ -279,7 +307,8 @@ app.MapGet("/api/categories", async (
         return Results.Ok(categories);
     }
 
-); app.MapGet("/api/external-technicians", async (
+);
+app.MapGet("/api/external-technicians", async (
     ReferenceService reference) =>
     {
         var externaltechnicians = await reference.GetAllExternalAsync();
@@ -288,6 +317,15 @@ app.MapGet("/api/categories", async (
 
 );
 
+app.MapPost("/api/auth/login", async (
+    LoginRequest request,
+    LoginService login) =>
+    {
+        var valid = await login.UserLoginAsync(request.Email, request.Password);
+        return valid ? Results.Ok() : Results.Unauthorized();
+    }
+
+);
 
 
 app.Run();
@@ -317,4 +355,5 @@ public record ApproveTicketRequest(
     string? Reason
 );
 
+public record LoginRequest(string Email, string Password);
 

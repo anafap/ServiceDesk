@@ -1,4 +1,5 @@
 namespace ServiceDesk.Domain.Entities;
+
 using ServiceDesk.Domain.Enums;
 
 
@@ -16,6 +17,7 @@ public class User
     public UserRole Role { get; private set; }
     public int? StoreId { get; private set; }
     public string FullName => $"{FirstName} {LastName}";
+    public string? PasswordHash { get; private set; }
 
     public User(string firstName, string lastName, string email, string phoneNumber, UserRole role, int? storeId)
     {
@@ -45,5 +47,12 @@ public class User
         Role = role;
         StoreId = storeId;
 
+    }
+
+    public void SetPasswordHash(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash))
+            throw new ArgumentException("password is required.", nameof(passwordHash));
+        PasswordHash = passwordHash;
     }
 }

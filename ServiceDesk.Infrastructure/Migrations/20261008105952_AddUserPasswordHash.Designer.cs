@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ServiceDesk.Infrastructure;
 
@@ -11,9 +12,11 @@ using ServiceDesk.Infrastructure;
 namespace ServiceDesk.Infrastructure.Migrations
 {
     [DbContext(typeof(ServiceDeskDbContext))]
-    partial class ServiceDeskDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008105952_AddUserPasswordHash")]
+    partial class AddUserPasswordHash
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
