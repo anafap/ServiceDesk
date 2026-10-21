@@ -3,6 +3,7 @@ import { getTickets, priorityLabels, statusLabels } from '../api/tickets'
 import type { Ticket } from '../api/tickets'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
+import { CreateTicketForm } from '../components/CreateTicketForm'
 
 type TicketState =
   | { status: 'loading' }
@@ -22,6 +23,8 @@ function formatCreatedAt(value: string) {
 export function TicketsPage() {
   const [state, setState] = useState<TicketState>({ status: 'loading' })
   const [requestVersion, setRequestVersion] = useState(0)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -51,6 +54,18 @@ export function TicketsPage() {
   return (
     <>
       <PageHeader eyebrow="MAINTENANCE" title="Tickets" description="Track requests, coordinate assignments, and follow each resolution." />
+      <div className="page-actions">
+        <button className="button button-primary" type="button" aria-expanded={showCreateForm} aria-controls="create-ticket" disabled={showCreateForm} onClick={() => { setNotice(''); setShowCreateForm(true) }}>New ticket</button>
+      </div>
+      {notice && <p className="form-message success-message" role="status">{notice}</p>}
+      {showCreateForm && <CreateTicketForm
+        onCancel={() => setShowCreateForm(false)}
+        onCreated={(ticket) => {
+          setShowCreateForm(false)
+          setNotice(`Ticket #${ticket.id} created successfully and is awaiting approval.`)
+          reloadTickets()
+        }}
+      />}
       <section className="panel" aria-labelledby="tickets-title" aria-busy={state.status === 'loading'}>
         <div className="panel-heading">
           <h2 id="tickets-title">All tickets</h2>
