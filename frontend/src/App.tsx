@@ -3,6 +3,10 @@ import { AppIcon } from './components/AppIcon'
 import { EmptyState } from './components/EmptyState'
 import { PageHeader } from './components/PageHeader'
 import { TicketsPage } from './pages/TicketsPage'
+import { LoginPage } from './pages/LoginPage'
+import { useSession } from './auth/useSession'
+import { setSession } from './auth/session'
+import { useEffect } from 'react'
 import './App.css'
 
 function OverviewPage() {
@@ -36,6 +40,14 @@ function NotFoundPage() {
 }
 
 function App() {
+  const session = useSession()
+  useEffect(() => {
+    if (!session) return
+    const timer = setTimeout(() => setSession(null), Math.max(0, Date.parse(session.expiresAt) - Date.now()))
+    return () => clearTimeout(timer)
+  }, [session])
+  if (!session) return <LoginPage />
+
   return (
     <BrowserRouter>
       <a className="skip-link" href="#main-content">Skip to main content</a>
@@ -58,7 +70,8 @@ function App() {
         <div className="workspace">
           <header className="topbar">
             <span>Store maintenance workspace</span>
-            <span className="environment-label">Local demo</span>
+            <div className="session-actions"><span>{session.user.name} · {session.user.role === 'StoreManager' ? 'Store manager' : 'Admin'}</span>
+              <button className="button button-secondary" type="button" onClick={() => setSession(null)}>Sign out</button></div>
           </header>
           <main id="main-content" className="main-content" tabIndex={-1}>
             <Routes>

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
-import { afterEach, mock, test } from 'node:test'
+import { afterEach, beforeEach, mock, test } from 'node:test'
 import { getReferenceData } from '../src/api/referenceData.ts'
+import { signInForTest } from './sessionFixture.ts'
+import { setSession } from '../src/auth/session.ts'
 
-afterEach(() => mock.restoreAll())
+beforeEach(signInForTest)
+afterEach(() => { mock.restoreAll(); setSession(null) })
 
 test('loads stores and categories from their real endpoint paths', async () => {
   const fetchMock = mock.method(globalThis, 'fetch', async (path: string) => Response.json(

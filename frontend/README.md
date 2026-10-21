@@ -35,7 +35,8 @@ text limits, creates a request through `POST /api/tickets`, and refreshes the
 list after success. Fields are preserved on failure, and duplicate submissions
 are blocked while saving. An interrupted write is never retried automatically:
 check the ticket list before resubmitting an unconfirmed save.
-Overview summaries and authentication are not implemented yet.
+Overview summaries are not implemented yet. Login/logout and authenticated API
+requests are implemented for Admin and StoreManager accounts.
 No simulated ticket data or authentication is presented in the application.
 
 Run the API separately from the repository root:
@@ -51,24 +52,32 @@ changes if it does not restart automatically. The proxy is development-only;
 production hosting must route `/api` to the backend separately. Do not use
 the frontend preview server to verify API integration.
 
-## Local demo creator
+## Sign-in and session behavior
 
-Copy `.env.example` to `.env.local` and set `VITE_DEMO_USER_ID` to an existing
-user ID verified in your local database. Restart Vite after changing environment
-files. The form labels the demo creator explicitly; this is not authentication.
-The current API still trusts the supplied creator ID. Server-derived identity
-and authorization belong to the upcoming security milestone.
+Sign in with an existing account. In Development, the API can initialize the
+configured demo Admin from `DemoUser:Email` and `DemoUser:Password` user-secrets;
+credentials are never included in frontend source. StoreManager accounts must
+already have a hashed password and an assigned store in the database.
 
-This value is a non-secret public ID. All `VITE_` values can be read in browser
-code; never use them for passwords, connection strings, or signing keys.
-The local file is ignored by Git. Creation is disabled when this setting is
-missing/invalid and in production builds until authentication is implemented.
+The frontend treats the access token as opaque and attaches it as a bearer
+Authorization header. The token lives only in tab memory, not localStorage or
+sessionStorage. Full reload, sign-out, token expiry, or a 401 clears the session
+and requires sign-in again. A 403 indicates insufficient permission and keeps
+an otherwise valid session. Sign-out clears this browser session; a copied token
+is valid until its 30-minute expiry. Refresh tokens/revocation are not implemented.
+
+The create form records the authenticated user on the server. The old
+`VITE_DEMO_USER_ID` setting and creator ID field are no longer used, including
+in production builds. API authorization is authoritative; hiding a page does
+not grant or deny API access. Production hosting must use HTTPS.
 
 `npm test` uses Node's built-in test runner and TypeScript support (Node 22.18+
 or a compatible newer release), with no extra test dependencies. Tests cover
 ticket response handling, empty data, HTTP/network failures, malformed data,
-cancellation, create requests, lookup data, form validation, and demo identity.
+cancellation, create requests, lookup data, form validation, login responses,
+bearer headers, expiry, and logout.
 They do not replace browser interaction checks.
 
-The ASP.NET Core solution stays at the repository root. Browser code must never contain database credentials,
+The ASP.NET Core solution stays at the repository root. Browser code must never
+contain database credentials,
 JWT signing keys, or other server secrets.

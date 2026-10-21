@@ -4,7 +4,8 @@ import { getReferenceData } from '../api/referenceData'
 import type { ReferenceItem } from '../api/referenceData'
 import { createTicket, priorityLabels } from '../api/tickets'
 import type { Ticket, TicketPriority } from '../api/tickets'
-import { getDemoCreatorId, validateTicketForm } from '../forms/ticketForm'
+import { validateTicketForm } from '../forms/ticketForm'
+import { useSession } from '../auth/useSession'
 import type { TicketFormErrors, TicketFormValues } from '../forms/ticketForm'
 
 type LookupState =
@@ -17,9 +18,8 @@ type CreateTicketFormProps = {
   onCancel: () => void
 }
 
-const demoCreatorId = getDemoCreatorId(import.meta.env.VITE_DEMO_USER_ID, import.meta.env.DEV)
-
 export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps) {
+  const session = useSession()
   const [lookups, setLookups] = useState<LookupState>({ status: 'loading' })
   const [lookupVersion, setLookupVersion] = useState(0)
   const [values, setValues] = useState<TicketFormValues>({ title: '', description: '', storeId: '', categoryId: '', priority: '2' })
@@ -53,7 +53,7 @@ export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps)
 
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (activeSave.current || lookups.status !== 'success' || demoCreatorId === null) return
+    if (activeSave.current || lookups.status !== 'success' || !session) return
     const validationErrors = validateTicketForm(values, lookups.stores, lookups.categories)
     setErrors(validationErrors)
     setSaveError('')
@@ -71,7 +71,7 @@ export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps)
       const ticket = await createTicket({
         title: values.title.trim(), description: values.description.trim(),
         storeId: Number(values.storeId), categoryId: Number(values.categoryId),
-        priority: Number(values.priority) as TicketPriority, createdByUserId: demoCreatorId,
+        priority: Number(values.priority) as TicketPriority,
       }, controller.signal)
       if (!controller.signal.aborted) onCreated(ticket)
     } catch (error: unknown) {
@@ -82,16 +82,14 @@ export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps)
     }
   }
 
-  const canSubmit = demoCreatorId !== null && lookups.status === 'success'
+  const canSubmit = session !== null && lookups.status === 'success'
     && lookups.stores.length > 0 && lookups.categories.length > 0
 
   return (
     <section id="create-ticket" className="panel create-ticket" aria-labelledby="create-ticket-title">
-      <div className="panel-heading"><h2 id="create-ticket-title" ref={heading} tabIndex={-1}>Create a ticket</h2><span className="badge">Local demo</span></div>
+      <div className="panel-heading"><h2 id="create-ticket-title" ref={heading} tabIndex={-1}>Create a ticket</h2></div>
       <div className="ticket-form-content">
-        <p className="demo-notice">{demoCreatorId === null
-          ? 'Ticket creation is unavailable in this demo. A demo creator must be configured by the workspace owner.'
-          : `Local demo: requests are recorded as demo user #${demoCreatorId}. Sign-in is not available yet.`}</p>
+        <p className="demo-notice">Requesting as {session?.user.name}. New tickets are sent for approval.</p>
         {lookups.status === 'loading' && <p role="status" className="lookup-message">Loading stores and categories…</p>}
         {lookups.status === 'error' && <div className="form-message error-message" role="alert">
           <p>Stores and categories could not be loaded.</p>

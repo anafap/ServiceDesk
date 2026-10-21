@@ -13,17 +13,17 @@ public class LoginService
         _users = users;
         _passwordHasher = passwordHasher;
     }
-    public async Task<bool> UserLoginAsync(string email, string password)
+    public async Task<User?> AuthenticateAsync(string email, string password)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-            return false;
-        var user = await _users.GetByEmailAsync(email);
+            return null;
+        var user = await _users.GetByEmailAsync(email.Trim());
 
         if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash))
-            return false;
+            return null;
 
         var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
 
-        return result != PasswordVerificationResult.Failed;
+        return result == PasswordVerificationResult.Failed ? null : user;
     }
 }

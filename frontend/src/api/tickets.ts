@@ -1,3 +1,5 @@
+import { apiFetch } from './http.ts'
+
 export type TicketStatus = 1 | 2 | 3 | 4 | 5 | 6 | 7
 export type TicketPriority = 1 | 2 | 3 | 4
 
@@ -14,7 +16,6 @@ export type Ticket = {
 export type CreateTicketRequest = {
   title: string
   description: string
-  createdByUserId: number
   categoryId: number
   storeId: number
   priority: TicketPriority
@@ -50,7 +51,7 @@ function isTicket(value: unknown): value is Ticket {
 }
 
 export async function getTickets(signal: AbortSignal): Promise<Ticket[]> {
-  const response = await fetch('/api/tickets', {
+  const response = await apiFetch('/api/tickets', {
     headers: { Accept: 'application/json' },
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })
@@ -72,7 +73,7 @@ export async function createTicket(request: CreateTicketRequest, signal: AbortSi
   const uncertainMessage = 'We could not confirm whether the ticket was saved. Refresh the ticket list before submitting again.'
 
   try {
-    response = await fetch('/api/tickets', {
+    response = await apiFetch('/api/tickets', {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

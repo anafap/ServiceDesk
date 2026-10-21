@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { getDemoCreatorId, validateTicketForm } from '../src/forms/ticketForm.ts'
+import { validateTicketForm } from '../src/forms/ticketForm.ts'
 
 const stores = [{ id: 1, name: 'Main store' }]
 const categories = [{ id: 2, name: 'Equipment' }]
@@ -25,12 +25,4 @@ test('rejects IDs outside loaded lookups and unsupported priorities', () => {
   assert.ok(errors.categoryId)
   assert.ok(errors.priority)
   assert.ok(validateTicketForm(valid, [], []).storeId)
-})
-
-test('demo identity requires a valid local configuration and is disabled in production', () => {
-  assert.equal(getDemoCreatorId('1', true), 1)
-  assert.equal(getDemoCreatorId('1', false), null)
-  for (const value of [undefined, '', '0', '-1', '1.5', 'bad', '9007199254740992']) {
-    assert.equal(getDemoCreatorId(value, true), null)
-  }
 })

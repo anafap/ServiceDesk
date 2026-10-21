@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict'
-import { afterEach, mock, test } from 'node:test'
+import { afterEach, beforeEach, mock, test } from 'node:test'
 import { createTicket, getTickets } from '../src/api/tickets.ts'
+import { signInForTest } from './sessionFixture.ts'
+import { setSession } from '../src/auth/session.ts'
 
 const ticket = {
   id: 1, title: 'Printer issue', description: 'Paper is jammed',
   status: 1, priority: 3, storeId: 1, createdAt: '2026-10-21T09:00:00',
 }
 
-afterEach(() => mock.restoreAll())
+beforeEach(signInForTest)
+afterEach(() => { mock.restoreAll(); setSession(null) })
 
 test('loads real-shaped ticket data through the relative API path', async () => {
   const fetchMock = mock.method(globalThis, 'fetch', async () => Response.json([ticket]))
@@ -49,7 +52,7 @@ test('passes cancellation to fetch so leaving the page can cancel a request', as
 })
 
 const createRequest = {
-  title: 'Printer issue', description: 'Paper is jammed', createdByUserId: 1,
+  title: 'Printer issue', description: 'Paper is jammed',
   categoryId: 2, storeId: 1, priority: 3 as const,
 }
 
@@ -61,6 +64,8 @@ test('creates a ticket with numeric IDs and priority in a JSON POST', async () =
   assert.equal(options.method, 'POST')
   assert.deepEqual(JSON.parse(String(options.body)), createRequest)
   assert.equal(new Headers(options.headers).get('Content-Type'), 'application/json')
+  assert.equal(new Headers(options.headers).get('Authorization'), 'Bearer test-access-token')
+  assert.equal(Object.hasOwn(JSON.parse(String(options.body)), 'createdByUserId'), false)
 })
 
 test('reports rejected create requests without claiming success', async () => {

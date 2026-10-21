@@ -502,12 +502,12 @@ public class TicketServiceTests
             AddedTicket = ticket;
             return Task.CompletedTask;
         }
-        public Task<List<SupportTicket>> GetAllAsync()
+        public Task<List<SupportTicket>> GetAllAsync(int? storeId = null)
         {
             var tickets = _ticket is not null
                           ? new List<SupportTicket> { _ticket }
                           : new List<SupportTicket>();
-            return Task.FromResult(tickets);
+            return Task.FromResult(tickets.Where(ticket => !storeId.HasValue || ticket.StoreId == storeId.Value).ToList());
         }
 
 

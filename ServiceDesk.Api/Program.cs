@@ -9,11 +9,24 @@ using Microsoft.AspNetCore.Identity;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using ServiceDesk.Api.Security;
+using ServiceDesk.Api.Endpoints;
+using Microsoft.OpenApi;
 
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Sign in through /api/auth/login, then enter the returned accessToken."
+    });
+    options.OperationFilter<BearerSecurityOperationFilter>();
+});
 
 builder.Services.AddScoped<ISupportTicketRepository, SupportTicketRepository>();
 builder.Services.AddDbContext<ServiceDeskDbContext>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -29,39 +42,53 @@ builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
-var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt: Key is missing.");
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer is missing.");
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience is missing");
-
-var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
-if (keyBytes.Length < 32)
-    throw new InvalidOperationException("Jwt:Key must be at least 32 bytes");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
-{
-    options.MapInboundClaims = false;
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services.AddOptions<JwtSettings>()
+    .BindConfiguration("Jwt")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.Key) && Encoding.UTF8.GetByteCount(settings.Key) >= 32,
+        "Jwt:Key must contain at least 32 UTF-8 bytes.")
+    .Validate(settings => !string.IsNullOrWhiteSpace(settings.Issuer) && !string.IsNullOrWhiteSpace(settings.Audience),
+        "Jwt:Issuer and Jwt:Audience are required.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<Microsoft.Extensions.Options.IOptions<JwtSettings>>((options, configured) =>
     {
-        ValidateIssuer = true,
-        ValidIssuer = jwtIssuer,
-        ValidateAudience = true,
-        ValidAudience = jwtAudience,
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-        ValidateLifetime = true,
-        ClockSkew = TimeSpan.Zero,
-        NameClaimType = "sub",
-        RoleClaimType = "role"
-    };
-
+        var settings = configured.Value;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = settings.Issuer,
+            ValidateAudience = true,
+            ValidAudience = settings.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.Key)),
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
+            NameClaimType = "sub",
+            RoleClaimType = "role"
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (context.Principal is null || !JwtIdentity.HasValidClaims(context.Principal))
+                    context.Fail("Required user claims are missing or invalid.");
+                return Task.CompletedTask;
+            }
+        };
+    });
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser().RequireRole(nameof(UserRole.Admin), nameof(UserRole.StoreManager)).Build();
+    options.FallbackPolicy = options.DefaultPolicy;
+    options.AddPolicy("Admin", policy => policy.RequireRole(nameof(UserRole.Admin)));
 });
-builder.Services.AddAuthorization();
-
-
 
 var app = builder.Build();
-app.UseAuthentication();
-app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {
@@ -91,304 +118,19 @@ if (app.Environment.IsDevelopment())
     }
 }
 
-//create
-app.MapPost("/api/tickets", async (
-    CreateTicketRequest request,
-    TicketService ticketService) =>
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapPost("/api/auth/login", async (LoginRequest request, LoginService login, JwtTokenService tokens, HttpResponse response) =>
 {
-    var ticket = await ticketService.CreateTicketAsync(
-        request.Title,
-        request.Description,
-        request.CreatedByUserId,
-        request.CategoryId,
-        request.StoreId,
-        request.Priority
-    );
-    return Results.Created($"/api/tickets/{ticket.Id}", ticket);
+    response.Headers.CacheControl = "no-store";
+    response.Headers.Pragma = "no-cache";
+    var user = await login.AuthenticateAsync(request.Email, request.Password);
+    return user is null ? Results.Unauthorized() : Results.Ok(tokens.Issue(user));
+}).AllowAnonymous();
 
-});
-
-//read all
-app.MapGet("/api/tickets", async (
-    TicketService ticketService) =>
-{
-    var tickets = await ticketService.GetAllTicketsAsync();
-
-    return Results.Ok(tickets);
-
-});
-
-//approve
-app.MapPost("/api/tickets/{ticketId:int}/approve", async Task<IResult> (
-    int ticketId, TicketService ticketService,
-    ApproveTicketRequest request) =>
-{
-    try
-    {
-        await ticketService.ApproveTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException exception)
-    {
-        return Results.NotFound(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Conflict(new
-        {
-            message = exception.Message
-        });
-    }
-
-
-});
-
-//reject
-app.MapPost("/api/tickets/{ticketId:int}/reject", async Task<IResult> (
-    int ticketId, TicketService ticketService, ApproveTicketRequest request) =>
-{
-    try
-    {
-        await ticketService.RejectTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException exception)
-    {
-        return Results.NotFound(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Conflict(new
-        {
-            message = exception.Message
-        });
-    }
-});
-
-//assign
-app.MapPost("/api/tickets/{ticketId:int}/assign", async Task<IResult> (
-    int ticketId,
-    AssignTicketRequest request,
-    TicketService ticketService) =>
-{
-    try
-    {
-        await ticketService.AssignTicketAsync(
-            ticketId,
-            request.ExternalTechnicianId,
-            request.AssignedByUserId,
-            request.ScheduledAt,
-            request.Notes,
-            request.ChangedByUserId,
-            request.Reason
-        );
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException exception)
-    {
-        return Results.NotFound(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Conflict(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (ArgumentException exception)
-    {
-        return Results.BadRequest(new
-        {
-            message = exception.Message
-        });
-    }
-
-});
-
-//progress
-app.MapPost("/api/tickets/{ticketId:int}/progress", async (
-    int ticketId,
-    TicketService ticketService,
-    ApproveTicketRequest request) =>
-{
-    try
-    {
-        await ticketService.StartProgressTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException exception)
-    {
-        return Results.NotFound(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Conflict(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (ArgumentException exception)
-    {
-        return Results.BadRequest(new
-        {
-            message = exception.Message
-        });
-    }
-
-});
-
-//resolve
-app.MapPost("/api/tickets/{ticketId:int}/resolve", async (
-    int ticketId,
-    TicketService ticketService,
-    ApproveTicketRequest request) =>
-{
-    try
-    {
-        await ticketService.ResolveTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException exception)
-    {
-        return Results.NotFound(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Conflict(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (ArgumentException exception)
-    {
-        return Results.BadRequest(new
-        {
-            message = exception.Message
-        });
-    }
-
-});
-
-//close
-app.MapPost("/api/tickets/{ticketId:int}/close", async (
-    int ticketId,
-    TicketService ticketService, ApproveTicketRequest request) =>
-{
-    try
-    {
-        await ticketService.CloseTicketAsync(ticketId, request.ChangedByUserId, request.Reason);
-        return Results.NoContent();
-    }
-    catch (KeyNotFoundException exception)
-    {
-        return Results.NotFound(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (InvalidOperationException exception)
-    {
-        return Results.Conflict(new
-        {
-            message = exception.Message
-        });
-    }
-    catch (ArgumentException exception)
-    {
-        return Results.BadRequest(new
-        {
-            message = exception.Message
-        });
-    }
-
-});
-
-//get history
-app.MapGet("/api/tickets/{ticketId:int}/history", async (
-    int ticketId, TicketService ticketService) =>
-{
-    var histories = await ticketService.GetHistoryByTicketIdAsync(ticketId);
-    return Results.Ok(histories);
-}
-);
-
-app.MapGet("/api/stores", async (
-    ReferenceService reference) =>
-    {
-        var stores = await reference.GetAllStoresAsync();
-        return Results.Ok(stores);
-    }
-
-);
-app.MapGet("/api/categories", async (
-    ReferenceService reference) =>
-    {
-        var categories = await reference.GetAllCategoriesAsync();
-        return Results.Ok(categories);
-    }
-
-);
-app.MapGet("/api/external-technicians", async (
-    ReferenceService reference) =>
-    {
-        var externaltechnicians = await reference.GetAllExternalAsync();
-        return Results.Ok(externaltechnicians);
-    }
-
-);
-
-app.MapPost("/api/auth/login", async (
-    LoginRequest request,
-    LoginService login) =>
-    {
-        var valid = await login.UserLoginAsync(request.Email, request.Password);
-        return valid ? Results.Ok() : Results.Unauthorized();
-    }
-
-);
-
-
+app.MapServiceDeskEndpoints();
 app.Run();
 
-public record CreateTicketRequest(
-    string Title,
-    string Description,
-    int CreatedByUserId,
-    int CategoryId,
-    int StoreId,
-    TicketPriority Priority
-
-);
-
-public record AssignTicketRequest(
-    int ExternalTechnicianId,
-    int AssignedByUserId,
-    string Notes,
-    DateTime ScheduledAt,
-    int ChangedByUserId,
-    string? Reason
-
-);
-
-public record ApproveTicketRequest(
-    int ChangedByUserId,
-    string? Reason
-);
-
 public record LoginRequest(string Email, string Password);
-
+public partial class Program { }

@@ -132,10 +132,15 @@ public class TicketService
 
     }
 
-    public async Task<List<SupportTicket>> GetAllTicketsAsync()
+    public async Task<List<SupportTicket>> GetAllTicketsAsync(int? storeId = null)
     {
-        return await _ticketRepository.GetAllAsync();
+        return await _ticketRepository.GetAllAsync(storeId);
     }
+    public Task<SupportTicket?> GetTicketByIdAsync(int ticketId)
+    {
+        return _ticketRepository.GetByIdAsync(ticketId);
+    }
+
     public async Task<List<TicketStatusHistory>> GetHistoryByTicketIdAsync(int ticketId)
     {
         return await _historyRepository.GetByTicketId(ticketId);

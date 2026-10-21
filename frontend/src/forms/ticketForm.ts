@@ -10,12 +10,6 @@ export type TicketFormValues = {
 
 export type TicketFormErrors = Partial<Record<keyof TicketFormValues, string>>
 
-export function getDemoCreatorId(value: string | undefined, development: boolean): number | null {
-  if (!development || !value || !/^[1-9]\d*$/.test(value)) return null
-  const id = Number(value)
-  return Number.isSafeInteger(id) ? id : null
-}
-
 export function validateTicketForm(
   values: TicketFormValues,
   stores: ReferenceItem[],
