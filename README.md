@@ -116,11 +116,12 @@ The current implementation has completed the domain foundation, persistence wiri
 - `SupportTicketRepository`, `TechnicianAssignmentRepository`, and `TicketStatusHistoryRepository` are implemented.
 - SQL Server connection configuration is supplied through user-secrets or environment variables.
 - Dependency injection registers the database context, repositories, and `TicketService`.
-- The backend suite passes 73 tests, including authentication and authorization integration tests.
+- The backend suite passes 83 tests, including authentication and authorization integration tests.
 - React provides sign-in/sign-out, a real ticket list, a create-ticket form, and ticket details/history.
 - JWT issuance, role checks, store-level access, and trusted audit identity are implemented.
 
-Ticket editing, workflow screens, and dashboard summaries remain unfinished.
+Ticket title, description, and priority editing is implemented. Workflow screens
+and dashboard summaries remain unfinished.
 Mrs.Ana confirmed the Admin browser flow for login, list/create, persistence,
 mobile layout, and logout; the new detail/history page still needs browser review.
 See [frontend/README.md](frontend/README.md) for frontend commands and session behavior.
@@ -148,6 +149,7 @@ expired, wrongly scoped, or tampered tokens return 401; wrong roles return 403.
 |---|---|---|
 | List/create tickets | All stores | Assigned store only |
 | Read ticket details/history | All stores | Assigned store only |
+| Edit title/description/priority | All stores | Assigned store only |
 | Approve/reject/assign/progress/resolve | Allowed | Forbidden |
 | Close resolved tickets | All stores | Assigned store only |
 | Store lookup | All active stores | Assigned active store only |
@@ -159,6 +161,9 @@ Cross-store detail/history/close requests return 404 to avoid revealing ticket e
 store/category/creator IDs, optional asset ID, and creation time. The existing
 `GET /api/tickets/{ticketId}/history` returns recorded transitions oldest first.
 Empty history is shown honestly; creation events are not synthesized.
+`PUT /api/tickets/{ticketId}` edits only title, description, and priority, with
+required text/length/priority validation. It preserves ownership, creation time,
+and lifecycle status. Editing does not create a status-transition history entry.
 
 Creator, assigning Admin, and history actors come from the validated token;
 client-supplied actor IDs are ignored. Create requests now accept title,

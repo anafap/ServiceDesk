@@ -23,6 +23,13 @@ public static class ServiceDeskEndpoints
                 ticket.Priority, ticket.StoreId, ticket.CategoryId, ticket.CreatedByUserId, ticket.AssetId, ticket.CreatedAt));
         });
 
+        tickets.MapPut("/{ticketId:int}", async (int ticketId, EditTicketRequest request, TicketService service, ClaimsPrincipal user) =>
+        {
+            var ticket = await service.GetTicketByIdAsync(ticketId);
+            if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
+            return await RunTransition(() => service.UpdateTicketDetailsAsync(ticketId, request.Title, request.Description, request.Priority));
+        });
+
         tickets.MapPost("", async (CreateTicketRequest request, TicketService service, ReferenceService references, ClaimsPrincipal user) =>
         {
             if (!JwtIdentity.CanAccessStore(user, request.StoreId)) return Results.Forbid();
@@ -79,6 +86,7 @@ public static class ServiceDeskEndpoints
 }
 
 public record CreateTicketRequest(string Title, string Description, int CategoryId, int StoreId, TicketPriority Priority);
+public record EditTicketRequest(string Title, string Description, TicketPriority Priority);
 public record TicketDetailsResponse(int Id, string Title, string Description, TicketStatus Status,
     TicketPriority Priority, int StoreId, int CategoryId, int CreatedByUserId, int? AssetId, DateTime CreatedAt);
 public record TransitionRequest(string? Reason);

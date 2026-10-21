@@ -47,6 +47,18 @@ public class SupportTicket
     }
 
 
+    public void UpdateDetails(string title, string description, TicketPriority priority)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 200)
+            throw new ArgumentException("Title is required and must be 200 characters or fewer.", nameof(title));
+        if (string.IsNullOrWhiteSpace(description) || description.Trim().Length > 4000)
+            throw new ArgumentException("Description is required and must be 4,000 characters or fewer.", nameof(description));
+        if (!Enum.IsDefined(priority)) throw new ArgumentException("Invalid ticket priority.", nameof(priority));
+        Title = title.Trim();
+        Description = description.Trim();
+        Priority = priority;
+    }
+
     public void Approve()
     {
         if (Status != TicketStatus.AwaitingApproval)

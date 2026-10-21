@@ -5,6 +5,7 @@ import type { TicketDetails, TicketHistoryEntry } from '../api/ticketDetails'
 import { priorityLabels, statusLabels } from '../api/tickets'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
+import { EditTicketForm } from '../components/EditTicketForm'
 import { formatUtcDateTime, utcTimestamp } from '../utils/dates'
 
 type DetailsState =
@@ -69,6 +70,8 @@ function TicketHistory({ ticketId }: { ticketId: number }) {
 function TicketDetailsContent({ ticketId }: { ticketId: number }) {
   const [state, setState] = useState<DetailsState>({ status: 'loading' })
   const [requestVersion, setRequestVersion] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -91,6 +94,13 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
   return (
     <>
       <PageHeader eyebrow={`TICKET #${ticket.id}`} title={ticket.title} description="Maintenance request details and status history." />
+      {notice && <p className="form-message success-message" role="status">{notice}</p>}
+      {editing ? <EditTicketForm ticket={ticket} onCancel={() => setEditing(false)} onSaved={() => {
+        setEditing(false)
+        setNotice('Ticket changes saved.')
+        setState({ status: 'loading' })
+        setRequestVersion((version) => version + 1)
+      }} /> : <div className="page-actions"><button className="button button-secondary" type="button" onClick={() => { setNotice(''); setEditing(true) }}>Edit ticket</button></div>}
       <section className="panel ticket-details" aria-labelledby="details-title">
         <div className="panel-heading"><h2 id="details-title">Ticket details</h2></div>
         <div className="detail-body">
