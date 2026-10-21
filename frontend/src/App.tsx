@@ -1,7 +1,7 @@
 import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router'
 import { AppIcon } from './components/AppIcon'
-import { EmptyState } from './components/EmptyState'
 import { PageHeader } from './components/PageHeader'
+import { OverviewPage } from './pages/OverviewPage'
 import { TicketsPage } from './pages/TicketsPage'
 import { TicketDetailsPage } from './pages/TicketDetailsPage'
 import { LoginPage } from './pages/LoginPage'
@@ -9,27 +9,6 @@ import { useSession } from './auth/useSession'
 import { setSession } from './auth/session'
 import { useEffect } from 'react'
 import './App.css'
-
-function OverviewPage() {
-  return (
-    <>
-      <PageHeader eyebrow="YOUR WORKSPACE" title="Workspace overview" description="A central place to keep store maintenance moving." />
-      <section className="panel" aria-labelledby="activity-title">
-        <div className="panel-heading">
-          <h2 id="activity-title">Ticket activity</h2>
-          <span className="badge">Not available</span>
-        </div>
-        <EmptyState icon="overview" title="Ticket summaries aren't available yet" description="Visit Tickets to view maintenance requests. Dashboard summaries and recent activity will follow in a later step.">
-          <Link className="button button-primary" to="/tickets">Go to tickets <AppIcon name="arrow" /></Link>
-        </EmptyState>
-      </section>
-      <aside className="workspace-note">
-        <AppIcon name="info" />
-        <p>Keep every maintenance request in one place, from initial review to resolution.</p>
-      </aside>
-    </>
-  )
-}
 
 function NotFoundPage() {
   return (

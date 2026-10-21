@@ -121,10 +121,15 @@ The current implementation has completed the domain foundation, persistence wiri
 - JWT issuance, role checks, store-level access, and trusted audit identity are implemented.
 
 Ticket editing and role/status-aware workflow screens are implemented, including
-future technician assignment and saved visit details. Dashboard summaries, search,
-and filters remain unfinished.
+future technician assignment and saved visit details. Overview shows total, open,
+in-progress, and resolved counts plus the five newest accessible tickets. Open
+includes AwaitingApproval, Approved, and Assigned; Closed and Rejected contribute
+only to the total. Tickets supports case-insensitive title search and combined
+status/priority filters, result counts, and clearing filters. These views use the
+complete authenticated ticket list; server-side filtering/pagination is deferred.
+The frontend suite passes 53 tests; production build and lint pass.
 Mrs.Ana confirmed the Admin browser flow for login, list/create, persistence,
-mobile layout, and logout; the new detail/history page still needs browser review.
+mobile layout, and logout; the newer details/edit/workflow and dashboard/filter screens still need browser review.
 See [frontend/README.md](frontend/README.md) for frontend commands and session behavior.
 
 ## Authentication and API access
