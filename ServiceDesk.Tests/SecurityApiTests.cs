@@ -84,6 +84,7 @@ public class SecurityApiTests : IDisposable
     [InlineData("GET", "/api/tickets")]
     [InlineData("GET", "/api/tickets/1")]
     [InlineData("POST", "/api/tickets")]
+    [InlineData("PUT", "/api/tickets/1")]
     [InlineData("GET", "/api/tickets/1/history")]
     [InlineData("GET", "/api/stores")]
     [InlineData("GET", "/api/categories")]
@@ -168,6 +169,32 @@ public class SecurityApiTests : IDisposable
     {
         await SignIn();
         Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/tickets/999")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Manager_edits_own_ticket_without_changing_identity_or_status()
+    {
+        await SignIn("manager@example.test");
+        var response = await _client.PutAsJsonAsync("/api/tickets/1", new { title = " Updated ", description = " Updated description ", priority = 4, storeId = 2, createdByUserId = 999, status = 6 });
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var ticket = _api.Data.Tickets.Single(ticket => ticket.Id == 1);
+        Assert.Equal("Updated", ticket.Title);
+        Assert.Equal(TicketPriority.Critical, ticket.Priority);
+        Assert.Equal(1, ticket.StoreId);
+        Assert.Equal(11, ticket.CreatedByUserId);
+        Assert.Equal(TicketStatus.AwaitingApproval, ticket.Status);
+        Assert.Empty(_api.Data.History);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PutAsJsonAsync("/api/tickets/2", new { title = "Other", description = "Other", priority = 2 })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_edits_any_store_and_invalid_or_missing_edits_fail()
+    {
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PutAsJsonAsync("/api/tickets/2", new { title = "Fixed title", description = "Description", priority = 3 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PutAsJsonAsync("/api/tickets/2", new { title = " ", description = "Description", priority = 3 })).StatusCode);
+        Assert.Equal("Fixed title", _api.Data.Tickets[1].Title);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PutAsJsonAsync("/api/tickets/999", new { title = "Title", description = "Description", priority = 3 })).StatusCode);
     }
 
     [Theory]

@@ -47,6 +47,10 @@ failure does not hide loaded details. Missing or inaccessible tickets share the
 same not-found view. Navigation cancels obsolete requests; dates without a
 SQL timezone suffix are interpreted as UTC.
 
+The detail page includes Edit ticket for title, description, and priority, with
+validation, save/cancel, error preservation, and a fresh detail read after save.
+Ownership and status changes are excluded from the edit form.
+
 Overview summaries are not implemented yet. Login/logout and authenticated API
 requests are implemented for Admin and StoreManager accounts.
 No simulated ticket data or authentication is presented in the application.

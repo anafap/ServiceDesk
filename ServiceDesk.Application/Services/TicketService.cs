@@ -132,6 +132,14 @@ public class TicketService
 
     }
 
+    public async Task UpdateTicketDetailsAsync(int ticketId, string title, string description, TicketPriority priority)
+    {
+        var ticket = await _ticketRepository.GetByIdAsync(ticketId)
+            ?? throw new KeyNotFoundException($"Ticket with ID {ticketId} was not found.");
+        ticket.UpdateDetails(title, description, priority);
+        await _ticketRepository.SaveAsync(ticket);
+    }
+
     public async Task<List<SupportTicket>> GetAllTicketsAsync(int? storeId = null)
     {
         return await _ticketRepository.GetAllAsync(storeId);

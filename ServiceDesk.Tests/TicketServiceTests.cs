@@ -8,6 +8,27 @@ namespace ServiceDesk.Tests;
 public class TicketServiceTests
 {
     [Fact]
+    public async Task UpdateTicketDetailsAsync_saves_changes_without_status_history()
+    {
+        var ticket = new SupportTicket("Title", "Description", 1, 1, 1, TicketPriority.Low);
+        var repository = new FakeTicketRepository(ticket);
+        var history = new FakeTicketStatusHistoryRepository();
+        var service = new TicketService(repository, new FakeTechnicianAssignmentRepository(), history);
+        await service.UpdateTicketDetailsAsync(1, "Updated", "Updated description", TicketPriority.High);
+        Assert.True(repository.WasSaved);
+        Assert.Equal("Updated", ticket.Title);
+        Assert.Equal(TicketStatus.AwaitingApproval, ticket.Status);
+        Assert.Empty(history.Histories);
+    }
+
+    [Fact]
+    public async Task UpdateTicketDetailsAsync_missing_ticket_throws()
+    {
+        var service = new TicketService(new FakeTicketRepository(null), new FakeTechnicianAssignmentRepository(), new FakeTicketStatusHistoryRepository());
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.UpdateTicketDetailsAsync(99, "Title", "Description", TicketPriority.Low));
+    }
+
+    [Fact]
     public async Task ApproveTicketAsync_approves_and_saves_ticket()
     {
         var ticket = new SupportTicket(
