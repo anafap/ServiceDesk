@@ -29,6 +29,10 @@ such as `/tickets` to `index.html` for browser routing.
 
 The Tickets page loads real tickets from `GET /api/tickets`, with status and
 priority labels, UTC dates, refresh, loading, empty, error, and retry states.
+Title search is case-insensitive and ignores surrounding whitespace. Status and
+priority filters combine with the title search using AND. Clear filters restores
+the full accessible list; refresh preserves selections. Filtering runs locally
+on the complete API response; server-side filtering/pagination is deferred.
 It cancels requests on navigation and times out requests after 15 seconds.
 The New ticket form loads real stores/categories, validates required fields and
 text limits, creates a request through `POST /api/tickets`, and refreshes the
