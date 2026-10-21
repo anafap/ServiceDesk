@@ -3,6 +3,9 @@ namespace ServiceDesk.Domain.Entities;
 
 public class TechnicianAssignment
 {
+    // EF restores historical visits without rerunning rules for a new appointment.
+    private TechnicianAssignment() { }
+
     public int Id { get; private set; }
 
     public int SupportTicketId { get; private set; }

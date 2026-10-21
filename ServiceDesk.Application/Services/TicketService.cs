@@ -66,10 +66,10 @@ public class TicketService
         if (ticket is null)
             throw new KeyNotFoundException(
                 $"Ticket with ID {ticketId} was not found.");
+        var assignment = new TechnicianAssignment(ticketId, externaltechnicianId, assignedByUserId, scheduledAt, notes);
         var previousStatus = ticket.Status;
         ticket.Assign();
         var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-        var assignment = new TechnicianAssignment(ticketId, externaltechnicianId, assignedByUserId, scheduledAt, notes);
 
         await _ticketRepository.SaveAsync(ticket);
         await _assignmentRepository.AddAsync(assignment);
@@ -148,6 +148,9 @@ public class TicketService
     {
         return _ticketRepository.GetByIdAsync(ticketId);
     }
+
+    public Task<TechnicianAssignment?> GetLatestAssignmentAsync(int ticketId) =>
+        _assignmentRepository.GetLatestByTicketIdAsync(ticketId);
 
     public async Task<List<TicketStatusHistory>> GetHistoryByTicketIdAsync(int ticketId)
     {

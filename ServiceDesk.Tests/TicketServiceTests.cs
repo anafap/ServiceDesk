@@ -235,6 +235,9 @@ public class TicketServiceTests
             changedByUserId: 1,
             reason: ""
         ));
+        Assert.Equal(TicketStatus.Approved, ticket.Status);
+        Assert.False(repository.WasSaved);
+        Assert.Empty(historyRepository.Histories);
     }
     [Fact]
     public async Task StartProgressTicketAsync_moves_assigned_ticket_to_in_progress()
@@ -536,6 +539,8 @@ public class TicketServiceTests
 
     private class FakeTechnicianAssignmentRepository : ITechnicianAssignmentRepository
     {
+        public Task<TechnicianAssignment?> GetLatestByTicketIdAsync(int ticketId) =>
+            Task.FromResult(AddedAssignment?.SupportTicketId == ticketId ? AddedAssignment : null);
         public TechnicianAssignment? AddedAssignment { get; private set; }
 
         public Task AddAsync(TechnicianAssignment assignment)

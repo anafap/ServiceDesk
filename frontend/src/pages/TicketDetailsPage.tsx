@@ -6,6 +6,8 @@ import { priorityLabels, statusLabels } from '../api/tickets'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { EditTicketForm } from '../components/EditTicketForm'
+import { TicketWorkflow } from '../components/TicketWorkflow'
+import { TicketAssignment } from '../components/TicketAssignment'
 import { formatUtcDateTime, utcTimestamp } from '../utils/dates'
 
 type DetailsState =
@@ -72,6 +74,14 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
   const [requestVersion, setRequestVersion] = useState(0)
   const [editing, setEditing] = useState(false)
   const [notice, setNotice] = useState('')
+  const [workflowBusy, setWorkflowBusy] = useState(false)
+
+  function refreshDetails(message = '') {
+    setEditing(false)
+    setNotice(message)
+    setState({ status: 'loading' })
+    setRequestVersion((version) => version + 1)
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -96,11 +106,8 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
       <PageHeader eyebrow={`TICKET #${ticket.id}`} title={ticket.title} description="Maintenance request details and status history." />
       {notice && <p className="form-message success-message" role="status">{notice}</p>}
       {editing ? <EditTicketForm ticket={ticket} onCancel={() => setEditing(false)} onSaved={() => {
-        setEditing(false)
-        setNotice('Ticket changes saved.')
-        setState({ status: 'loading' })
-        setRequestVersion((version) => version + 1)
-      }} /> : <div className="page-actions"><button className="button button-secondary" type="button" onClick={() => { setNotice(''); setEditing(true) }}>Edit ticket</button></div>}
+        refreshDetails('Ticket changes saved.')
+      }} /> : <div className="page-actions workflow-buttons"><button className="button button-secondary" type="button" disabled={workflowBusy} onClick={() => refreshDetails()}>Refresh details</button><button className="button button-secondary" type="button" disabled={workflowBusy} onClick={() => { setNotice(''); setEditing(true) }}>Edit ticket</button></div>}
       <section className="panel ticket-details" aria-labelledby="details-title">
         <div className="panel-heading"><h2 id="details-title">Ticket details</h2></div>
         <div className="detail-body">
@@ -117,7 +124,9 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
           <p className="full-description">{ticket.description}</p>
         </div>
       </section>
-      <TicketHistory ticketId={ticket.id} />
+      {!editing && <TicketWorkflow key={`workflow-${requestVersion}`} ticket={ticket} onUpdated={refreshDetails} onBusyChange={setWorkflowBusy} />}
+      {ticket.status >= 3 && ticket.status <= 6 && <TicketAssignment key={`assignment-${requestVersion}`} ticketId={ticket.id} />}
+      <TicketHistory key={`history-${requestVersion}`} ticketId={ticket.id} />
     </>
   )
 }

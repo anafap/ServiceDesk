@@ -86,6 +86,7 @@ public class SecurityApiTests : IDisposable
     [InlineData("POST", "/api/tickets")]
     [InlineData("PUT", "/api/tickets/1")]
     [InlineData("GET", "/api/tickets/1/history")]
+    [InlineData("GET", "/api/tickets/1/assignment")]
     [InlineData("GET", "/api/stores")]
     [InlineData("GET", "/api/categories")]
     [InlineData("GET", "/api/external-technicians")]
@@ -253,6 +254,62 @@ public class SecurityApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Assignment_validates_options_and_normalizes_visit_time_to_utc()
+    {
+        await SignIn();
+        await _client.PostAsJsonAsync("/api/tickets/1/approve", new { });
+        var future = DateTimeOffset.UtcNow.AddDays(1).ToOffset(TimeSpan.FromHours(3));
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 99, scheduledAt = future, notes = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(-1), notes = "" })).StatusCode);
+        Assert.Equal(TicketStatus.Approved, _api.Data.Tickets[0].Status);
+        Assert.Empty(_api.Data.Assignments);
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = future, notes = "Bring parts" })).StatusCode);
+        Assert.Equal(future.UtcDateTime, Assert.Single(_api.Data.Assignments).ScheduledAt);
+    }
+
+    [Fact]
+    public async Task Assignment_read_is_store_scoped_and_returns_saved_schedule()
+    {
+        await SignIn();
+        await _client.PostAsJsonAsync("/api/tickets/1/approve", new { });
+        var visit = DateTimeOffset.UtcNow.AddDays(1);
+        await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = visit, notes = "Bring parts" });
+        await SignIn("manager@example.test");
+        var assignment = await _client.GetFromJsonAsync<JsonElement>("/api/tickets/1/assignment");
+        Assert.Equal(1, assignment.GetProperty("externalTechnicianId").GetInt32());
+        Assert.Equal("Bring parts", assignment.GetProperty("notes").GetString());
+        Assert.Equal(11, assignment.GetProperty("assignedByUserId").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/tickets/2/assignment")).StatusCode);
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.GetAsync("/api/tickets/2/assignment")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Api_can_complete_full_workflow_with_admin_and_manager_audit_actors()
+    {
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/approve", new { reason = "Valid request" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(1), notes = "Visit" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/progress", new { reason = "Work started" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/resolve", new { reason = "Repaired" })).StatusCode);
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/close", new { reason = "Confirmed" })).StatusCode);
+        Assert.Equal(TicketStatus.Closed, _api.Data.Tickets[0].Status);
+        Assert.Equal(5, _api.Data.History.Count);
+        Assert.All(_api.Data.History.Take(4), entry => Assert.Equal(11, entry.ChangedByUserId));
+        Assert.Equal(21, _api.Data.History.Last().ChangedByUserId);
+    }
+
+    [Fact]
+    public async Task Rejection_ends_workflow_and_records_reason()
+    {
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/reject", new { reason = "Duplicate request" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/tickets/1/approve", new { })).StatusCode);
+        Assert.Equal("Duplicate request", Assert.Single(_api.Data.History).Reason);
+    }
+
+    [Fact]
     public async Task Manager_can_close_only_own_resolved_ticket()
     {
         foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); ticket.StartProgress(); ticket.Resolve(); }
@@ -329,7 +386,8 @@ public class SecurityApiTests : IDisposable
         public Task SaveAsync(SupportTicket ticket) => Task.CompletedTask;
         public Task AddAsync(SupportTicket ticket) { SetId(ticket, Tickets.Count + 1); Tickets.Add(ticket); return Task.CompletedTask; }
         public Task AddAsync(TicketStatusHistory history) { History.Add(history); return Task.CompletedTask; }
-        public Task AddAsync(TechnicianAssignment assignment) { Assignments.Add(assignment); return Task.CompletedTask; }
+        public Task AddAsync(TechnicianAssignment assignment) { SetId(assignment, Assignments.Count + 1); Assignments.Add(assignment); return Task.CompletedTask; }
+        public Task<TechnicianAssignment?> GetLatestByTicketIdAsync(int ticketId) => Task.FromResult(Assignments.LastOrDefault(item => item.SupportTicketId == ticketId));
         public Task<List<TicketStatusHistory>> GetByTicketId(int id) => Task.FromResult(History.Where(item => item.SupportTicketId == id).ToList());
         public Task<List<Store>> GetStoreAsync()
         {
@@ -338,6 +396,11 @@ public class SecurityApiTests : IDisposable
             return Task.FromResult(stores);
         }
         public Task<List<TicketCategory>> GetCategoriesAsync() { var category = new TicketCategory(); SetId(category, 1); return Task.FromResult(new List<TicketCategory> { category }); }
-        public Task<List<ExternalTechnician>> GetTechniciansAsync() => Task.FromResult(new List<ExternalTechnician>());
+        public Task<List<ExternalTechnician>> GetTechniciansAsync()
+        {
+            var technician = new ExternalTechnician("Test technician", "Test company", "000", "General maintenance");
+            SetId(technician, 1);
+            return Task.FromResult(new List<ExternalTechnician> { technician });
+        }
     }
 }
