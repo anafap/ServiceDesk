@@ -2,6 +2,7 @@ import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router'
 import { AppIcon } from './components/AppIcon'
 import { EmptyState } from './components/EmptyState'
 import { PageHeader } from './components/PageHeader'
+import { TicketsPage } from './pages/TicketsPage'
 import './App.css'
 
 function OverviewPage() {
@@ -11,9 +12,9 @@ function OverviewPage() {
       <section className="panel" aria-labelledby="activity-title">
         <div className="panel-heading">
           <h2 id="activity-title">Ticket activity</h2>
-          <span className="badge">Not connected</span>
+          <span className="badge">Not available</span>
         </div>
-        <EmptyState icon="overview" title="Your workspace starts here" description="Ticket summaries and recent activity will appear here once ticket data is connected.">
+        <EmptyState icon="overview" title="Ticket summaries aren't available yet" description="Visit Tickets to view maintenance requests. Dashboard summaries and recent activity will follow in a later step.">
           <Link className="button button-primary" to="/tickets">Go to tickets <AppIcon name="arrow" /></Link>
         </EmptyState>
       </section>
@@ -21,21 +22,6 @@ function OverviewPage() {
         <AppIcon name="info" />
         <p>Keep every maintenance request in one place, from initial review to resolution.</p>
       </aside>
-    </>
-  )
-}
-
-function TicketsPage() {
-  return (
-    <>
-      <PageHeader eyebrow="MAINTENANCE" title="Tickets" description="Track requests, coordinate assignments, and follow each resolution." />
-      <section className="panel" aria-labelledby="tickets-title">
-        <div className="panel-heading">
-          <h2 id="tickets-title">All tickets</h2>
-          <span className="badge">Not connected</span>
-        </div>
-        <EmptyState icon="tickets" title="Ticket data is not connected yet" description="Your saved requests will appear here when the ticket connection is ready. Creating and managing tickets will be available in the next step." />
-      </section>
     </>
   )
 }
