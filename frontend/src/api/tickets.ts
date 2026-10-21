@@ -38,7 +38,7 @@ export const priorityLabels: Record<TicketPriority, string> = {
   4: 'Critical',
 }
 
-function isTicket(value: unknown): value is Ticket {
+export function isTicket(value: unknown): value is Ticket {
   if (typeof value !== 'object' || value === null) return false
   const ticket = value as Record<string, unknown>
   return typeof ticket.id === 'number' && Number.isInteger(ticket.id) && ticket.id > 0

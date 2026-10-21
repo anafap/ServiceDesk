@@ -3,6 +3,7 @@ import { AppIcon } from './components/AppIcon'
 import { EmptyState } from './components/EmptyState'
 import { PageHeader } from './components/PageHeader'
 import { TicketsPage } from './pages/TicketsPage'
+import { TicketDetailsPage } from './pages/TicketDetailsPage'
 import { LoginPage } from './pages/LoginPage'
 import { useSession } from './auth/useSession'
 import { setSession } from './auth/session'
@@ -77,6 +78,7 @@ function App() {
             <Routes>
               <Route path="/" element={<OverviewPage />} />
               <Route path="/tickets" element={<TicketsPage />} />
+              <Route path="/tickets/:ticketId" element={<TicketDetailsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </main>

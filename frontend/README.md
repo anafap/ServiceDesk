@@ -35,6 +35,18 @@ text limits, creates a request through `POST /api/tickets`, and refreshes the
 list after success. Fields are preserved on failure, and duplicate submissions
 are blocked while saving. An interrupted write is never retried automatically:
 check the ticket list before resubmitting an unconfirmed save.
+Click a ticket title to open `/tickets/{ticketId}`. The detail page loads the
+full description, status/priority, store/category/creator IDs, optional asset ID,
+and UTC creation time. Its history timeline shows recorded status transitions,
+actor IDs, timestamps, and reasons in chronological order. Store/user/category
+names are not resolved; IDs are clearly labeled. Empty history is not replaced
+with invented events.
+
+Details and history have separate loading/error/retry states, so a history
+failure does not hide loaded details. Missing or inaccessible tickets share the
+same not-found view. Navigation cancels obsolete requests; dates without a
+SQL timezone suffix are interpreted as UTC.
+
 Overview summaries are not implemented yet. Login/logout and authenticated API
 requests are implemented for Admin and StoreManager accounts.
 No simulated ticket data or authentication is presented in the application.
@@ -75,7 +87,8 @@ not grant or deny API access. Production hosting must use HTTPS.
 or a compatible newer release), with no extra test dependencies. Tests cover
 ticket response handling, empty data, HTTP/network failures, malformed data,
 cancellation, create requests, lookup data, form validation, login responses,
-bearer headers, expiry, and logout.
+bearer headers, expiry, logout, detail/history response validation, missing
+tickets, invalid route IDs, and UTC timestamp handling.
 They do not replace browser interaction checks.
 
 The ASP.NET Core solution stays at the repository root. Browser code must never

@@ -22,6 +22,8 @@ public class TicketStatusHistoryRepository : ITicketStatusHistoryRepository
     public async Task<List<TicketStatusHistory>> GetByTicketId(int ticketId)
     {
 
-        return await _dbContext.TicketStatusHistories.Where(history => history.SupportTicketId == ticketId).OrderBy(history => history.ChangedAt).ToListAsync();
+        return await _dbContext.TicketStatusHistories.AsNoTracking()
+            .Where(history => history.SupportTicketId == ticketId)
+            .OrderBy(history => history.ChangedAt).ThenBy(history => history.Id).ToListAsync();
     }
 }

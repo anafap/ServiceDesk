@@ -82,6 +82,7 @@ public class SecurityApiTests : IDisposable
 
     [Theory]
     [InlineData("GET", "/api/tickets")]
+    [InlineData("GET", "/api/tickets/1")]
     [InlineData("POST", "/api/tickets")]
     [InlineData("GET", "/api/tickets/1/history")]
     [InlineData("GET", "/api/stores")]
@@ -136,6 +137,37 @@ public class SecurityApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/categories")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/tickets/2/history")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/tickets/1/history")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_can_read_ticket_details_from_any_store()
+    {
+        await SignIn();
+        var ticket = await _client.GetFromJsonAsync<JsonElement>("/api/tickets/2");
+        Assert.Equal(2, ticket.GetProperty("id").GetInt32());
+        Assert.Equal(2, ticket.GetProperty("storeId").GetInt32());
+        Assert.Equal("Broken printer", ticket.GetProperty("description").GetString());
+        Assert.Equal(1, ticket.GetProperty("categoryId").GetInt32());
+        Assert.Equal(11, ticket.GetProperty("createdByUserId").GetInt32());
+        Assert.Equal(1, ticket.GetProperty("status").GetInt32());
+        Assert.Equal(2, ticket.GetProperty("priority").GetInt32());
+    }
+
+    [Fact]
+    public async Task Manager_can_read_only_own_store_ticket_details()
+    {
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/tickets/1")).StatusCode);
+        var response = await _client.GetAsync("/api/tickets/2");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.DoesNotContain("Broken printer", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Missing_ticket_details_return_404()
+    {
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/tickets/999")).StatusCode);
     }
 
     [Theory]
