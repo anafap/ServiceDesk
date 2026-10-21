@@ -31,9 +31,11 @@ public class SupportTicketRepository : ISupportTicketRepository
         await _dbContext.SaveChangesAsync();
     }
 
-    public async Task<List<SupportTicket>> GetAllAsync()
+    public async Task<List<SupportTicket>> GetAllAsync(int? storeId = null)
     {
-        return await _dbContext.SupportTickets.OrderByDescending(ticket => ticket.CreatedAt).ToListAsync();
+        var query = _dbContext.SupportTickets.AsNoTracking();
+        if (storeId.HasValue) query = query.Where(ticket => ticket.StoreId == storeId.Value);
+        return await query.OrderByDescending(ticket => ticket.CreatedAt).ToListAsync();
     }
 }
 

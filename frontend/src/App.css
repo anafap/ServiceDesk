@@ -88,6 +88,13 @@
 .error-message .button { margin-top: 10px; }
 .success-message { color: #126b60; background: #eaf5f1; border-color: #cce5db; }
 .lookup-message { color: #62717c; font-size: 13px; margin-bottom: 20px; }
+.session-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.login-layout { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.login-panel { padding: 32px; width: 100%; max-width: 440px; }
+.login-panel h1 { font-size: 24px; line-height: 1.3; letter-spacing: -.5px; }
+.login-panel form { margin-top: 28px; }
+.login-submit { width: 100%; margin-top: 24px; }
+.login-note { margin-top: 24px; color: #62717c; font-size: 12px; }
 
 @media (max-width: 760px) {
   .app-shell { flex-direction: column; }

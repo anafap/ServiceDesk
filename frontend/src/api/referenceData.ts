@@ -1,3 +1,5 @@
+import { apiFetch } from './http.ts'
+
 export type ReferenceItem = { id: number; name: string }
 
 export async function getReferenceData(signal: AbortSignal): Promise<{
@@ -5,7 +7,7 @@ export async function getReferenceData(signal: AbortSignal): Promise<{
   categories: ReferenceItem[]
 }> {
   async function load(path: string): Promise<ReferenceItem[]> {
-    const response = await fetch(path, {
+    const response = await apiFetch(path, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
     })

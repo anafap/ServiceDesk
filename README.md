@@ -78,7 +78,8 @@ Contains HTTP endpoints, authentication configuration, request/response models, 
 
 ### Tests
 
-Contains unit tests for domain rules and application tests for use cases. Integration tests will later verify the API and database together.
+Contains unit tests for domain rules and application tests for use cases. Security integration tests exercise the real API and JWT middleware with isolated
+repository fakes. SQL-backed behavior is checked separately against the local demo.
 
 ## Current domain model
 
@@ -113,11 +114,55 @@ The current implementation has completed the domain foundation, persistence wiri
 - Ticket status history records the previous status, new status, actor, time, and reason for workflow transitions.
 - `ServiceDeskDbContext` and EF Core entity configurations are present.
 - `SupportTicketRepository`, `TechnicianAssignmentRepository`, and `TicketStatusHistoryRepository` are implemented.
-- SQL Server connection configuration is present in `ServiceDesk.Api/appsettings.json`.
+- SQL Server connection configuration is supplied through user-secrets or environment variables.
 - Dependency injection registers the database context, repositories, and `TicketService`.
-- The test suite currently passes with 33 tests.
+- The backend suite passes 69 tests, including authentication and authorization integration tests.
+- React provides sign-in/sign-out, a real ticket list, and a create-ticket form.
+- JWT issuance, role checks, store-level access, and trusted audit identity are implemented.
 
-The next guided coding step is to add API authentication and role-based authorization using JWT bearer tokens. This will be implemented incrementally and explained before each change.
+Ticket details/editing, workflow screens, dashboard summaries, and browser verification remain unfinished.
+See [frontend/README.md](frontend/README.md) for frontend commands and session behavior.
+
+## Authentication and API access
+
+Configure these values outside Git, using API user-secrets or environment variables:
+
+- `ConnectionStrings:DefaultConnection`: the local SQL Server connection.
+- `Jwt:Key`: a randomly generated signing key of at least 32 UTF-8 bytes.
+- `Jwt:Issuer` and `Jwt:Audience`: matching values used for token issuance/validation.
+- Development-only `DemoUser:Email` and `DemoUser:Password`: optional demo Admin
+  initialization. Existing passwords are not reset automatically.
+
+`POST /api/auth/login` accepts `{ "email": "...", "password": "..." }` and returns
+`accessToken`, `tokenType` (`Bearer`), `expiresAt`, and public user metadata
+(`id`, `name`, `role`, `storeId`). Passwords/hashes are never returned. Tokens
+expire after 30 minutes. Invalid credentials return 401 with no user details.
+
+Send `Authorization: Bearer <accessToken>` for data endpoints. Swagger in
+Development includes an Authorize control for the returned token. Invalid,
+expired, wrongly scoped, or tampered tokens return 401; wrong roles return 403.
+
+| Operation | Admin | StoreManager |
+|---|---|---|
+| List/create tickets | All stores | Assigned store only |
+| Read ticket history | All stores | Assigned store only |
+| Approve/reject/assign/progress/resolve | Allowed | Forbidden |
+| Close resolved tickets | All stores | Assigned store only |
+| Store lookup | All active stores | Assigned active store only |
+| Categories | Allowed | Allowed |
+| External technician contacts | Allowed | Forbidden |
+
+Cross-store history/close requests return 404 to avoid revealing ticket existence.
+Creator, assigning Admin, and history actors come from the validated token;
+client-supplied actor IDs are ignored. Create requests now accept title,
+description, categoryId, storeId, and priority. Transition requests accept reason;
+assignment also accepts externalTechnicianId, scheduledAt, and notes.
+
+The React session stays in memory and is cleared on reload/sign-out/expiry/401.
+Logout does not revoke copied tokens; refresh tokens and revocation are not yet
+implemented. StoreManager accounts require an assigned store and a hashed
+password; account management is not exposed as a public API. Use HTTPS for any
+hosted environment. This remains a portfolio demo, not a production deployment.
 
 ## Development commands
 
