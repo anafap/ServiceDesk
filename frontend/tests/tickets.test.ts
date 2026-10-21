@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, mock, test } from 'node:test'
-import { getTickets } from '../src/api/tickets.ts'
+import { createTicket, getTickets } from '../src/api/tickets.ts'
 
 const ticket = {
   id: 1, title: 'Printer issue', description: 'Paper is jammed',
@@ -46,4 +46,38 @@ test('passes cancellation to fetch so leaving the page can cancel a request', as
   const controller = new AbortController()
   controller.abort()
   await assert.rejects(getTickets(controller.signal), { name: 'AbortError' })
+})
+
+const createRequest = {
+  title: 'Printer issue', description: 'Paper is jammed', createdByUserId: 1,
+  categoryId: 2, storeId: 1, priority: 3 as const,
+}
+
+test('creates a ticket with numeric IDs and priority in a JSON POST', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => Response.json(ticket, { status: 201 }))
+  assert.deepEqual(await createTicket(createRequest, new AbortController().signal), ticket)
+  const [path, options] = fetchMock.mock.calls[0].arguments as unknown as [string, RequestInit]
+  assert.equal(path, '/api/tickets')
+  assert.equal(options.method, 'POST')
+  assert.deepEqual(JSON.parse(String(options.body)), createRequest)
+  assert.equal(new Headers(options.headers).get('Content-Type'), 'application/json')
+})
+
+test('reports rejected create requests without claiming success', async () => {
+  mock.method(globalThis, 'fetch', async () => new Response('Invalid', { status: 400 }))
+  await assert.rejects(createTicket(createRequest, new AbortController().signal), /not accepted \(HTTP 400\)/)
+})
+
+test('does not automatically retry an uncertain write after network failure', async () => {
+  const fetchMock = mock.method(globalThis, 'fetch', async () => { throw new TypeError('Connection lost') })
+  await assert.rejects(createTicket(createRequest, new AbortController().signal), /Refresh the ticket list before submitting again/)
+  assert.equal(fetchMock.mock.callCount(), 1)
+})
+
+test('treats server failures or invalid success responses as unconfirmed saves', async () => {
+  for (const response of [new Response('', { status: 500 }), Response.json({}), new Response('not JSON', { status: 201 })]) {
+    mock.method(globalThis, 'fetch', async () => response)
+    await assert.rejects(createTicket(createRequest, new AbortController().signal), /could not confirm/)
+    mock.restoreAll()
+  }
 })

@@ -11,6 +11,15 @@ export type Ticket = {
   createdAt: string
 }
 
+export type CreateTicketRequest = {
+  title: string
+  description: string
+  createdByUserId: number
+  categoryId: number
+  storeId: number
+  priority: TicketPriority
+}
+
 export const statusLabels: Record<TicketStatus, string> = {
   1: 'Awaiting approval',
   2: 'Approved',
@@ -56,4 +65,33 @@ export async function getTickets(signal: AbortSignal): Promise<Ticket[]> {
   }
 
   return data
+}
+
+export async function createTicket(request: CreateTicketRequest, signal: AbortSignal): Promise<Ticket> {
+  let response: Response
+  const uncertainMessage = 'We could not confirm whether the ticket was saved. Refresh the ticket list before submitting again.'
+
+  try {
+    response = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    })
+  } catch {
+    throw new Error(uncertainMessage)
+  }
+
+  if (!response.ok) {
+    if (response.status >= 500) throw new Error(uncertainMessage)
+    throw new Error(`The ticket was not accepted (HTTP ${response.status}). Check your entries and try again.`)
+  }
+
+  try {
+    const data: unknown = await response.json()
+    if (!isTicket(data)) throw new Error('Unexpected ticket response')
+    return data
+  } catch {
+    throw new Error(uncertainMessage)
+  }
 }
