@@ -73,8 +73,16 @@ uncertain writes are never retried automatically. Edit/refresh controls are disa
 while a workflow write is pending. Successful writes reload details, assignment,
 and history from the backend. No notification provider is invoked.
 
-Overview summaries are not implemented yet. Login/logout and authenticated API
-requests are implemented for Admin and StoreManager accounts.
+Overview loads the same authenticated ticket endpoint to display total, open,
+in-progress, and resolved counts, plus the five newest tickets with detail links.
+Open covers AwaitingApproval, Approved, and Assigned; Closed/Rejected count only
+in the total. Recent tickets sort by creation time (UTC), with descending ID for
+ties. Summary cards appear after a successful response; loading or failed requests
+do not display invented zero counts. Empty data, errors/retry, and refresh are
+supported. Both pages use server-enforced access boundaries and compute derived
+views locally; no dashboard-specific endpoint or database changes are needed.
+Login/logout and authenticated API requests are implemented for Admin and
+StoreManager accounts.
 No simulated ticket data or authentication is presented in the application.
 
 Run the API separately from the repository root:
@@ -115,7 +123,10 @@ ticket response handling, empty data, HTTP/network failures, malformed data,
 cancellation, create requests, lookup data, form validation, login responses,
 bearer headers, expiry, logout, detail/history response validation, missing
 tickets, invalid route IDs, and UTC timestamp handling.
-They do not replace browser interaction checks.
+The 53 tests also cover combined title/status/priority filtering, all workflow
+statuses, empty/non-matching data, summary classification, and recent-ticket
+ordering with timezone offsets and tie handling. They do not replace browser
+interaction checks.
 
 The ASP.NET Core solution stays at the repository root. Browser code must never
 contain database credentials,
