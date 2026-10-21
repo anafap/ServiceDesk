@@ -116,12 +116,13 @@ The current implementation has completed the domain foundation, persistence wiri
 - `SupportTicketRepository`, `TechnicianAssignmentRepository`, and `TicketStatusHistoryRepository` are implemented.
 - SQL Server connection configuration is supplied through user-secrets or environment variables.
 - Dependency injection registers the database context, repositories, and `TicketService`.
-- The backend suite passes 83 tests, including authentication and authorization integration tests.
+- The backend suite passes 88 tests, including authentication and authorization integration tests.
 - React provides sign-in/sign-out, a real ticket list, a create-ticket form, and ticket details/history.
 - JWT issuance, role checks, store-level access, and trusted audit identity are implemented.
 
-Ticket title, description, and priority editing is implemented. Workflow screens
-and dashboard summaries remain unfinished.
+Ticket editing and role/status-aware workflow screens are implemented, including
+future technician assignment and saved visit details. Dashboard summaries, search,
+and filters remain unfinished.
 Mrs.Ana confirmed the Admin browser flow for login, list/create, persistence,
 mobile layout, and logout; the new detail/history page still needs browser review.
 See [frontend/README.md](frontend/README.md) for frontend commands and session behavior.
@@ -148,7 +149,7 @@ expired, wrongly scoped, or tampered tokens return 401; wrong roles return 403.
 | Operation | Admin | StoreManager |
 |---|---|---|
 | List/create tickets | All stores | Assigned store only |
-| Read ticket details/history | All stores | Assigned store only |
+| Read ticket details/history/assignment | All stores | Assigned store only |
 | Edit title/description/priority | All stores | Assigned store only |
 | Approve/reject/assign/progress/resolve | Allowed | Forbidden |
 | Close resolved tickets | All stores | Assigned store only |
@@ -168,7 +169,17 @@ and lifecycle status. Editing does not create a status-transition history entry.
 Creator, assigning Admin, and history actors come from the validated token;
 client-supplied actor IDs are ignored. Create requests now accept title,
 description, categoryId, storeId, and priority. Transition requests accept reason;
-assignment also accepts externalTechnicianId, scheduledAt, and notes.
+assignment also accepts externalTechnicianId, scheduledAt, and notes. Visit times
+are accepted with a timezone offset and normalized to UTC; only active technician
+IDs and future dates are accepted. `GET /api/tickets/{ticketId}/assignment` returns
+the latest assignment, or 204 when none exists, with the same store access rules.
+
+For a placeholder technician in a local demo database, run
+[SeedDemoTechnician.sql](ServiceDesk.Infrastructure/Sql/SeedDemoTechnician.sql).
+It is idempotent and creates a clearly labeled demo contact; no messages are sent.
+This feature does not add technician contact-management screens or notifications.
+Workflow status and audit/assignment saves still use separate repository writes;
+transactional consistency across those writes remains a pending reliability task.
 
 The React session stays in memory and is cleared on reload/sign-out/expiry/401.
 Logout does not revoke copied tokens; refresh tokens and revocation are not yet

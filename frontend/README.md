@@ -51,6 +51,24 @@ The detail page includes Edit ticket for title, description, and priority, with
 validation, save/cancel, error preservation, and a fresh detail read after save.
 Ownership and status changes are excluded from the edit form.
 
+The Workflow panel offers actions based on the current role and ticket status:
+approve/reject, assign, start progress, resolve, and close. Each action uses a
+confirmation form with an optional reason. Admins control the workflow; managers
+can close resolved tickets for their own store. Server rules remain authoritative.
+
+Assignment loads active technicians from the real API, requires a future visit
+time entered in the browser's local timezone, and sends an ISO UTC timestamp.
+The saved assignment panel shows the technician ID, UTC visit time, assigning
+user ID, and notes. Its data is reloaded from the API after changes and navigation.
+Empty/failed technician lookups disable assignment and provide clear feedback.
+A placeholder local contact can be provisioned using the backend's
+`ServiceDesk.Infrastructure/Sql/SeedDemoTechnician.sql` script.
+
+Workflow failures preserve form input. Conflict responses ask the user to refresh;
+uncertain writes are never retried automatically. Edit/refresh controls are disabled
+while a workflow write is pending. Successful writes reload details, assignment,
+and history from the backend. No notification provider is invoked.
+
 Overview summaries are not implemented yet. Login/logout and authenticated API
 requests are implemented for Admin and StoreManager accounts.
 No simulated ticket data or authentication is presented in the application.

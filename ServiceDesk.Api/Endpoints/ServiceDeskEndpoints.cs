@@ -30,6 +30,14 @@ public static class ServiceDeskEndpoints
             return await RunTransition(() => service.UpdateTicketDetailsAsync(ticketId, request.Title, request.Description, request.Priority));
         });
 
+        tickets.MapGet("/{ticketId:int}/assignment", async (int ticketId, TicketService service, ClaimsPrincipal user) =>
+        {
+            var ticket = await service.GetTicketByIdAsync(ticketId);
+            if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
+            var assignment = await service.GetLatestAssignmentAsync(ticketId);
+            return assignment is null ? Results.NoContent() : Results.Ok(assignment);
+        });
+
         tickets.MapPost("", async (CreateTicketRequest request, TicketService service, ReferenceService references, ClaimsPrincipal user) =>
         {
             if (!JwtIdentity.CanAccessStore(user, request.StoreId)) return Results.Forbid();
@@ -49,9 +57,15 @@ public static class ServiceDeskEndpoints
             RunTransition(() => service.ApproveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
         tickets.MapPost("/{ticketId:int}/reject", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
             RunTransition(() => service.RejectTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
-        tickets.MapPost("/{ticketId:int}/assign", (int ticketId, AssignTicketRequest request, TicketService service, ClaimsPrincipal user) =>
-            RunTransition(() => service.AssignTicketAsync(ticketId, request.ExternalTechnicianId, JwtIdentity.UserId(user),
-                request.ScheduledAt, request.Notes, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
+        tickets.MapPost("/{ticketId:int}/assign", async (int ticketId, AssignTicketRequest request, TicketService service, ReferenceService references, ClaimsPrincipal user) =>
+        {
+            if (request.ScheduledAt <= DateTimeOffset.UtcNow)
+                return Results.BadRequest(new { message = "Choose a future visit time." });
+            if (!(await references.GetAllExternalAsync()).Any(technician => technician.Id == request.ExternalTechnicianId))
+                return Results.BadRequest(new { message = "Select an active external technician." });
+            return await RunTransition(() => service.AssignTicketAsync(ticketId, request.ExternalTechnicianId, JwtIdentity.UserId(user),
+                request.ScheduledAt.UtcDateTime, request.Notes, JwtIdentity.UserId(user), request.Reason));
+        }).RequireAuthorization("Admin");
         tickets.MapPost("/{ticketId:int}/progress", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
             RunTransition(() => service.StartProgressTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
         tickets.MapPost("/{ticketId:int}/resolve", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
@@ -90,4 +104,4 @@ public record EditTicketRequest(string Title, string Description, TicketPriority
 public record TicketDetailsResponse(int Id, string Title, string Description, TicketStatus Status,
     TicketPriority Priority, int StoreId, int CategoryId, int CreatedByUserId, int? AssetId, DateTime CreatedAt);
 public record TransitionRequest(string? Reason);
-public record AssignTicketRequest(int ExternalTechnicianId, string Notes, DateTime ScheduledAt, string? Reason);
+public record AssignTicketRequest(int ExternalTechnicianId, string Notes, DateTimeOffset ScheduledAt, string? Reason);
