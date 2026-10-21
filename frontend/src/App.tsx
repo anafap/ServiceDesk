@@ -1,0 +1,91 @@
+import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router'
+import { AppIcon } from './components/AppIcon'
+import { EmptyState } from './components/EmptyState'
+import { PageHeader } from './components/PageHeader'
+import './App.css'
+
+function OverviewPage() {
+  return (
+    <>
+      <PageHeader eyebrow="YOUR WORKSPACE" title="Workspace overview" description="A central place to keep store maintenance moving." />
+      <section className="panel" aria-labelledby="activity-title">
+        <div className="panel-heading">
+          <h2 id="activity-title">Ticket activity</h2>
+          <span className="badge">Not connected</span>
+        </div>
+        <EmptyState icon="overview" title="Your workspace starts here" description="Ticket summaries and recent activity will appear here once ticket data is connected.">
+          <Link className="button button-primary" to="/tickets">Go to tickets <AppIcon name="arrow" /></Link>
+        </EmptyState>
+      </section>
+      <aside className="workspace-note">
+        <AppIcon name="info" />
+        <p>Keep every maintenance request in one place, from initial review to resolution.</p>
+      </aside>
+    </>
+  )
+}
+
+function TicketsPage() {
+  return (
+    <>
+      <PageHeader eyebrow="MAINTENANCE" title="Tickets" description="Track requests, coordinate assignments, and follow each resolution." />
+      <section className="panel" aria-labelledby="tickets-title">
+        <div className="panel-heading">
+          <h2 id="tickets-title">All tickets</h2>
+          <span className="badge">Not connected</span>
+        </div>
+        <EmptyState icon="tickets" title="Ticket data is not connected yet" description="Your saved requests will appear here when the ticket connection is ready. Creating and managing tickets will be available in the next step." />
+      </section>
+    </>
+  )
+}
+
+function NotFoundPage() {
+  return (
+    <>
+      <PageHeader eyebrow="PAGE NOT FOUND" title="Let's get you back" description="This page does not exist." />
+      <Link className="button button-primary" to="/">Return to overview</Link>
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <a className="skip-link" href="#main-content">Skip to main content</a>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <Link className="brand" to="/" aria-label="ServiceDesk overview">
+            <span className="brand-mark"><AppIcon name="brand" /></span>
+            <span>ServiceDesk<span className="brand-caption">STORE OPERATIONS</span></span>
+          </Link>
+          <div className="nav-heading">WORKSPACE</div>
+          <nav className="primary-nav" aria-label="Main navigation">
+            <NavLink to="/" end><AppIcon name="overview" />Overview</NavLink>
+            <NavLink to="/tickets"><AppIcon name="tickets" />Tickets</NavLink>
+          </nav>
+          <div className="sidebar-footer">
+            <span className="footer-mark"><AppIcon name="brand" /></span>
+            <div><strong>Better maintenance.</strong><span>One request at a time.</span></div>
+          </div>
+        </aside>
+        <div className="workspace">
+          <header className="topbar">
+            <span>Store maintenance workspace</span>
+            <span className="environment-label">Local demo</span>
+          </header>
+          <main id="main-content" className="main-content" tabIndex={-1}>
+            <Routes>
+              <Route path="/" element={<OverviewPage />} />
+              <Route path="/tickets" element={<TicketsPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </main>
+          <footer className="workspace-footer">ServiceDesk <span>Maintenance, made manageable.</span></footer>
+        </div>
+      </div>
+    </BrowserRouter>
+  )
+}
+
+export default App
