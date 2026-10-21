@@ -95,6 +95,26 @@
 .login-panel form { margin-top: 28px; }
 .login-submit { width: 100%; margin-top: 24px; }
 .login-note { margin-top: 24px; color: #62717c; font-size: 12px; }
+.ticket-link { color: #126b60; font-weight: 600; }
+.ticket-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.back-link { display: inline-block; margin-bottom: 24px; color: #126b60; font-size: 13px; font-weight: 600; }
+.back-link:hover { text-decoration: underline; }
+.ticket-details { margin-bottom: 24px; }
+.ticket-details + .panel { margin-bottom: 24px; }
+.page-header h1 { overflow-wrap: anywhere; }
+.detail-body { padding: 24px; }
+.ticket-metadata { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin: 0 0 28px; }
+.ticket-metadata dt { margin-bottom: 8px; color: #62717c; font-size: 12px; }
+.ticket-metadata dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.description-title { border-top: 1px solid #edf0f2; padding-top: 24px; font-size: 13px; font-weight: 600; }
+.full-description { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 12px; font-size: 14px; line-height: 1.8; }
+.history-list { list-style: none; padding: 8px 24px; margin: 0; }
+.history-list li { position: relative; padding: 20px 0 20px 24px; border-bottom: 1px solid #edf0f2; }
+.history-list li:last-child { border-bottom: 0; }
+.history-list li::before { content: ''; position: absolute; left: 0; top: 27px; width: 8px; height: 8px; border: 2px solid #126b60; border-radius: 50%; background: #eaf5f1; }
+.history-transition { font-size: 13px; }
+.history-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 11px; color: #62717c; }
+.history-reason { margin-top: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; color: #53636e; }
 
 @media (max-width: 760px) {
   .app-shell { flex-direction: column; }
@@ -110,4 +130,6 @@
   .workspace-footer { margin: 0 20px; flex-wrap: wrap; gap: 4px 16px; }
   .ticket-fields { grid-template-columns: 1fr; }
   .ticket-form-content { padding: 20px; }
+  .ticket-metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .detail-body { padding: 20px; }
 }

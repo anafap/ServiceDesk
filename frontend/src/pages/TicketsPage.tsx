@@ -1,24 +1,16 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { getTickets, priorityLabels, statusLabels } from '../api/tickets'
 import type { Ticket } from '../api/tickets'
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { CreateTicketForm } from '../components/CreateTicketForm'
+import { formatUtcDate, utcTimestamp } from '../utils/dates'
 
 type TicketState =
   | { status: 'loading' }
   | { status: 'success'; tickets: Ticket[] }
   | { status: 'error'; message: string }
-
-const dateFormat = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
-})
-
-function formatCreatedAt(value: string) {
-  // SQL Server may return our stored UTC timestamps without a timezone suffix.
-  const utcValue = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`
-  return dateFormat.format(new Date(utcValue))
-}
 
 export function TicketsPage() {
   const [state, setState] = useState<TicketState>({ status: 'loading' })
@@ -90,11 +82,11 @@ export function TicketsPage() {
                 <thead><tr><th scope="col">Ticket</th><th scope="col">Status</th><th scope="col">Priority</th><th scope="col">Store</th><th scope="col">Created (UTC)</th></tr></thead>
                 <tbody>{state.tickets.map((ticket) => (
                   <tr key={ticket.id}>
-                    <td><span className="ticket-id">#{ticket.id}</span><strong className="ticket-title">{ticket.title}</strong><p className="ticket-description">{ticket.description}</p></td>
+                    <td><span className="ticket-id">#{ticket.id}</span><Link className="ticket-title ticket-link" to={`/tickets/${ticket.id}`} aria-label={`View ticket #${ticket.id}: ${ticket.title}`}>{ticket.title}</Link><p className="ticket-description">{ticket.description}</p></td>
                     <td><span className={`status-tag status-${ticket.status}`}>{statusLabels[ticket.status]}</span></td>
                     <td><span className={`priority-tag priority-${ticket.priority}`}>{priorityLabels[ticket.priority]}</span></td>
                     <td className="nowrap">Store #{ticket.storeId}</td>
-                    <td className="nowrap"><time dateTime={ticket.createdAt}>{formatCreatedAt(ticket.createdAt)}</time></td>
+                    <td className="nowrap"><time dateTime={utcTimestamp(ticket.createdAt)}>{formatUtcDate(ticket.createdAt)}</time></td>
                   </tr>
                 ))}</tbody>
               </table>

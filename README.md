@@ -110,17 +110,19 @@ The current implementation has completed the domain foundation, persistence wiri
 - Domain entities and ticket lifecycle rules are implemented.
 - Domain and application tests cover the main ticket workflow and status-history transitions.
 - `TicketService` contains create, approve, reject, assign, progress, resolve, and close use cases.
-- Ticket API endpoints exist for creation, listing, approval, rejection, assignment, progress, resolution, closing, and history retrieval.
+- Ticket API endpoints exist for creation, listing, approval, rejection, assignment, progress, resolution, closing, detail lookup, and history retrieval.
 - Ticket status history records the previous status, new status, actor, time, and reason for workflow transitions.
 - `ServiceDeskDbContext` and EF Core entity configurations are present.
 - `SupportTicketRepository`, `TechnicianAssignmentRepository`, and `TicketStatusHistoryRepository` are implemented.
 - SQL Server connection configuration is supplied through user-secrets or environment variables.
 - Dependency injection registers the database context, repositories, and `TicketService`.
-- The backend suite passes 69 tests, including authentication and authorization integration tests.
-- React provides sign-in/sign-out, a real ticket list, and a create-ticket form.
+- The backend suite passes 73 tests, including authentication and authorization integration tests.
+- React provides sign-in/sign-out, a real ticket list, a create-ticket form, and ticket details/history.
 - JWT issuance, role checks, store-level access, and trusted audit identity are implemented.
 
-Ticket details/editing, workflow screens, dashboard summaries, and browser verification remain unfinished.
+Ticket editing, workflow screens, and dashboard summaries remain unfinished.
+Mrs.Ana confirmed the Admin browser flow for login, list/create, persistence,
+mobile layout, and logout; the new detail/history page still needs browser review.
 See [frontend/README.md](frontend/README.md) for frontend commands and session behavior.
 
 ## Authentication and API access
@@ -145,14 +147,19 @@ expired, wrongly scoped, or tampered tokens return 401; wrong roles return 403.
 | Operation | Admin | StoreManager |
 |---|---|---|
 | List/create tickets | All stores | Assigned store only |
-| Read ticket history | All stores | Assigned store only |
+| Read ticket details/history | All stores | Assigned store only |
 | Approve/reject/assign/progress/resolve | Allowed | Forbidden |
 | Close resolved tickets | All stores | Assigned store only |
 | Store lookup | All active stores | Assigned active store only |
 | Categories | Allowed | Allowed |
 | External technician contacts | Allowed | Forbidden |
 
-Cross-store history/close requests return 404 to avoid revealing ticket existence.
+Cross-store detail/history/close requests return 404 to avoid revealing ticket existence.
+`GET /api/tickets/{ticketId}` returns the full description, status, priority,
+store/category/creator IDs, optional asset ID, and creation time. The existing
+`GET /api/tickets/{ticketId}/history` returns recorded transitions oldest first.
+Empty history is shown honestly; creation events are not synthesized.
+
 Creator, assigning Admin, and history actors come from the validated token;
 client-supplied actor IDs are ignored. Create requests now accept title,
 description, categoryId, storeId, and priority. Transition requests accept reason;
