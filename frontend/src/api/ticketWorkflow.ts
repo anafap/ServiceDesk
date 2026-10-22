@@ -1,3 +1,4 @@
+import { problemMessage } from './problems.ts'
 import { validDisplayNames } from '../utils/displayNames.ts'
 import { apiFetch } from './http.ts'
 
@@ -8,7 +9,7 @@ export type Assignment = {
   technicianName?: string | null; assignedByName?: string | null
   assignedAt: string; scheduledAt: string | null; notes: string
 }
-export type AssignmentRequest = { externalTechnicianId: number; scheduledAt: string; notes: string; reason: string | null }
+export type AssignmentRequest = { externalTechnicianId: number; scheduledAt: string; notes: string; reason: string | null; expectedVersion: string }
 
 export async function getTechnicians(signal: AbortSignal): Promise<Technician[]> {
   const response = await apiFetch('/api/external-technicians', { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) })
@@ -38,7 +39,7 @@ export async function getAssignment(ticketId: number, signal: AbortSignal): Prom
   return assignment as Assignment
 }
 
-export async function performTicketAction(ticketId: number, action: WorkflowAction, request: { reason: string | null } | AssignmentRequest, signal: AbortSignal): Promise<void> {
+export async function performTicketAction(ticketId: number, action: WorkflowAction, request: { reason: string | null; expectedVersion: string } | AssignmentRequest, signal: AbortSignal): Promise<void> {
   let response: Response
   const uncertain = 'We could not confirm the update. Refresh ticket details before trying again.'
   try {
@@ -50,7 +51,7 @@ export async function performTicketAction(ticketId: number, action: WorkflowActi
   if (response.ok) return
   if (response.status === 403) throw new Error('You do not have permission to perform this action.')
   if (response.status === 404) throw new Error('This ticket is no longer available or you do not have access.')
-  if (response.status === 409) throw new Error('This action is no longer valid for the ticket status. Refresh ticket details and try again.')
+  if (response.status === 409) throw new Error(await problemMessage(response, 'This ticket changed. Refresh ticket details and try again.'))
   if (response.status >= 500) throw new Error(uncertain)
   throw new Error('The update was not accepted. Check the technician, visit time, and other entries before trying again.')
 }

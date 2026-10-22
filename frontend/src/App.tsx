@@ -45,6 +45,7 @@ function App() {
             <NavLink to="/tickets"><AppIcon name="tickets" />Tickets</NavLink>
             {session.user.role === 'Admin' && <>
               <NavLink to="/admin/stores"><AppIcon name="overview" />Stores</NavLink>
+              <NavLink to="/admin/store-managers"><AppIcon name="overview" />StoreManagers</NavLink>
               <NavLink to="/admin/technicians"><AppIcon name="tickets" />Technicians</NavLink>
             </>}
           </nav>
@@ -64,6 +65,7 @@ function App() {
               <Route path="/" element={<OverviewPage />} />
               <Route path="/tickets" element={<TicketsPage />} />
               <Route path="/tickets/:ticketId" element={<TicketDetailsPage />} />
+              <Route path="/admin/store-managers" element={<AdministrationPage kind="store-managers" />} />
               <Route path="/admin/stores" element={<AdministrationPage kind="stores" />} />
               <Route path="/admin/technicians" element={<AdministrationPage kind="external-technicians" />} />
               <Route path="*" element={<NotFoundPage />} />

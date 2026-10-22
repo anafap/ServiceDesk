@@ -42,18 +42,18 @@ test('loads actual technician options and preserves the empty-data state', async
 test('workflow actions POST to real endpoint paths with bearer auth and no actor IDs', async () => {
   const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }))
   for (const action of ['approve', 'reject', 'progress', 'resolve', 'close'] as const) {
-    await performTicketAction(12, action, { reason: 'Confirmed' }, new AbortController().signal)
+    await performTicketAction(12, action, { reason: 'Confirmed', expectedVersion: 'AAAAAAAAAAA=' }, new AbortController().signal)
     const [path, options] = fetchMock.mock.calls.at(-1)!.arguments as unknown as [string, RequestInit]
     assert.equal(path, `/api/tickets/12/${action}`)
     assert.equal(options.method, 'POST')
     assert.equal(new Headers(options.headers).get('Authorization'), 'Bearer test-access-token')
-    assert.deepEqual(JSON.parse(String(options.body)), { reason: 'Confirmed' })
+    assert.deepEqual(JSON.parse(String(options.body)), { reason: 'Confirmed', expectedVersion: 'AAAAAAAAAAA=' })
   }
 })
 
 test('assignment posts the selected technician, UTC timestamp and notes', async () => {
   const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }))
-  const request = { externalTechnicianId: 1, scheduledAt: '2099-01-01T09:00:00.000Z', notes: 'Bring parts', reason: null }
+  const request = { externalTechnicianId: 1, scheduledAt: '2099-01-01T09:00:00.000Z', notes: 'Bring parts', reason: null, expectedVersion: 'AAAAAAAAAAA=' }
   await performTicketAction(12, 'assign', request, new AbortController().signal)
   const options = fetchMock.mock.calls[0].arguments[1] as RequestInit
   assert.deepEqual(JSON.parse(String(options.body)), request)
@@ -71,11 +71,11 @@ test('saved assignment handles no-record and populated responses', async () => {
 test('workflow conflicts and uncertain writes report errors without automatic retries', async () => {
   for (const status of [400, 403, 404, 409, 500]) {
     const fetchMock = mock.method(globalThis, 'fetch', async () => new Response('', { status }))
-    await assert.rejects(performTicketAction(12, 'approve', { reason: null }, new AbortController().signal))
+    await assert.rejects(performTicketAction(12, 'approve', { reason: null, expectedVersion: 'AAAAAAAAAAA=' }, new AbortController().signal))
     assert.equal(fetchMock.mock.callCount(), 1)
     mock.restoreAll()
   }
   const fetchMock = mock.method(globalThis, 'fetch', async () => { throw new TypeError('Connection lost') })
-  await assert.rejects(performTicketAction(12, 'approve', { reason: null }, new AbortController().signal), /Refresh ticket details/)
+  await assert.rejects(performTicketAction(12, 'approve', { reason: null, expectedVersion: 'AAAAAAAAAAA=' }, new AbortController().signal), /Refresh ticket details/)
   assert.equal(fetchMock.mock.callCount(), 1)
 })

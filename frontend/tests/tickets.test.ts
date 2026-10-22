@@ -6,7 +6,7 @@ import { setSession } from '../src/auth/session.ts'
 
 const ticket = {
   id: 1, title: 'Printer issue', description: 'Paper is jammed',
-  status: 1, priority: 3, storeId: 1, createdAt: '2026-10-21T09:00:00',
+  status: 1, priority: 3, storeId: 1, version: 'AAAAAAAAAAA=', createdAt: '2026-10-21T09:00:00',
 }
 
 beforeEach(signInForTest)
@@ -29,7 +29,7 @@ test('reports unsuccessful HTTP responses instead of treating them as data', asy
 })
 
 test('rejects malformed responses and unsupported status/priority values', async () => {
-  for (const data of [{ tickets: [] }, [{ ...ticket, status: 99 }], [{ ...ticket, priority: 0 }], [{ ...ticket, createdAt: 'invalid' }]]) {
+  for (const data of [{ tickets: [] }, [{ ...ticket, status: 99 }], [{ ...ticket, priority: 0 }], [{ ...ticket, version: 'AAAAAAAAAAA=', createdAt: 'invalid' }]]) {
     mock.method(globalThis, 'fetch', async () => Response.json(data))
     await assert.rejects(getTickets(new AbortController().signal), /unexpected ticket data/)
     mock.restoreAll()

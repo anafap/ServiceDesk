@@ -12,6 +12,8 @@ export type TicketHistoryEntry = {
   changedByName?: string | null
   changedByUserId: number
   changedAt: string
+  reversesHistoryId?: number | null
+  technicianAssignmentId?: number | null
   reason: string
 }
 
@@ -56,7 +58,7 @@ export async function getTicketHistory(ticketId: number, signal: AbortSignal): P
   if (!Array.isArray(data) || !data.every((entry: unknown) => {
     if (typeof entry !== 'object' || entry === null) return false
     const item = entry as Record<string, unknown>
-    return validDisplayNames(item, ['changedByName']) && positiveId(item.id) && item.supportTicketId === ticketId
+    return (item.reversesHistoryId === undefined || item.reversesHistoryId === null || positiveId(item.reversesHistoryId)) && (item.technicianAssignmentId === undefined || item.technicianAssignmentId === null || positiveId(item.technicianAssignmentId)) && validDisplayNames(item, ['changedByName']) && positiveId(item.id) && item.supportTicketId === ticketId
       && (item.previousStatus === null || typeof item.previousStatus === 'number' && Object.hasOwn(statusLabels, item.previousStatus))
       && typeof item.newStatus === 'number' && Object.hasOwn(statusLabels, item.newStatus)
       && positiveId(item.changedByUserId) && typeof item.reason === 'string'
