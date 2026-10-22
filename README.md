@@ -15,6 +15,8 @@ and frontend run natively; the database has a repeatable Compose configuration.
 Use [the portfolio demonstration](docs/DEMO.md) for the two-role walkthrough,
 screenshot checklist, and interview talking points. Screenshots are pending
 actual capture; no mock screens are presented as evidence.
+[Learning notes](docs/LEARNING.md) explain the changes, concepts, interview
+questions, and an independent exercise.
 
 ## Working features
 
@@ -108,7 +110,12 @@ npm --prefix frontend run build
 Latest feature checks: **107 backend tests passed with SQL enabled**, zero skips;
 **59 frontend tests passed**; builds/lint passed. Database-free backend runs skip
 SQL cases explicitly. Tests are verification evidence, not a replacement for
-browser review of newly added screens.
+browser review of newly added screens. A clean local clone successfully restored
+dependencies/tools, started the separate Compose SQL instance, applied migrations,
+seeded demo data twice, and built the frontend. A real three-account HTTP
+walkthrough verified management, inactive-record behavior, named responses, and
+the full Admin/StoreManager workflow. The temporary review SQL instance was then
+removed.
 
 Privately set `SERVICEDESK_TEST_SQL_CONNECTION` to enable SQL tests. They override
 the supplied database name with `ServiceDesk_TransactionTests_<guid>`, migrate a
