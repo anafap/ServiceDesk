@@ -481,3 +481,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Browser test reports and transient artifacts
+frontend/playwright-report/
+frontend/test-results/
