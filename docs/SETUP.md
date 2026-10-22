@@ -45,11 +45,11 @@ or the equivalent environment variables. Supply your own values locally:
 | `Jwt:Issuer` | `Jwt__Issuer` | `ServiceDesk.Local` |
 | `Jwt:Audience` | `Jwt__Audience` | `ServiceDesk.Frontend` |
 | `DemoData:Admin:Email` | `DemoData__Admin__Email` | Your demo Admin email, e.g. `admin@example.test` |
-| `DemoData:Admin:Password` | `DemoData__Admin__Password` | Unique local password, at least 12 characters |
+| `DemoData:Admin:Password` | `DemoData__Admin__Password` | Unique local password, at least 8 characters |
 | `DemoData:Manager1:Email` | `DemoData__Manager1__Email` | `manager1@example.test` |
-| `DemoData:Manager1:Password` | `DemoData__Manager1__Password` | Unique local password, at least 12 characters |
+| `DemoData:Manager1:Password` | `DemoData__Manager1__Password` | Unique local password, at least 8 characters |
 | `DemoData:Manager2:Email` | `DemoData__Manager2__Email` | `manager2@example.test` |
-| `DemoData:Manager2:Password` | `DemoData__Manager2__Password` | Unique local password, at least 12 characters |
+| `DemoData:Manager2:Password` | `DemoData__Manager2__Password` | Unique local password, at least 8 characters |
 
 For example, `dotnet user-secrets --project ServiceDesk.Api set Jwt:Issuer
 ServiceDesk.Local` sets one non-secret value. For passwords, avoid literal values
