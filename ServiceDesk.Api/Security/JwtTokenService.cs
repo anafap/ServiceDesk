@@ -30,6 +30,7 @@ public sealed class JwtTokenService(IOptions<JwtSettings> configured)
         {
             new("sub", user.Id.ToString(CultureInfo.InvariantCulture)),
             new("role", user.Role.ToString()),
+            new("session_version", user.SessionVersion.ToString(CultureInfo.InvariantCulture)),
             new("jti", Guid.NewGuid().ToString())
         };
         if (user.StoreId.HasValue) claims.Add(new("store_id", user.StoreId.Value.ToString(CultureInfo.InvariantCulture)));

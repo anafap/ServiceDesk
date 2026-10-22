@@ -30,11 +30,82 @@ public class SecurityApiTests : IDisposable
 
     private async Task<LoginResponse> SignIn(string email = "admin@example.test")
     {
-        var response = await _client.PostAsJsonAsync("/api/auth/login", new { email, password = TestApi.Password });
+        var response = await PostAsync("/api/auth/login", new { email, password = TestApi.Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var session = (await response.Content.ReadFromJsonAsync<LoginResponse>())!;
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
         return session;
+    }
+
+    private Task<HttpResponseMessage> PostAsync(string path, object body) => MutateAsync(HttpMethod.Post, path, body);
+    private Task<HttpResponseMessage> PutAsync(string path, object body) => MutateAsync(HttpMethod.Put, path, body);
+    private Task<HttpResponseMessage> MutateAsync(HttpMethod method, string path, object body)
+    {
+        var json = JsonSerializer.SerializeToNode(body)!.AsObject();
+        if (path.StartsWith("/api/tickets/") && !json.ContainsKey("expectedVersion")) json["expectedVersion"] = Convert.ToBase64String(new byte[8]);
+        return _client.SendAsync(new HttpRequestMessage(method, path) { Content = JsonContent.Create(json) });
+    }
+
+    [Fact]
+    public async Task Unexpected_failures_return_safe_problem_details_with_trace()
+    {
+        await SignIn();
+        _api.Data.ThrowOnList = true;
+        var response = await _client.GetAsync("/api/tickets");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("PRIVATE_TEST_SENTINEL", json);
+        Assert.Contains("traceId", json);
+    }
+
+    [Fact]
+    public async Task Version_is_required_and_stale_versions_have_problem_details()
+    {
+        await SignIn();
+        var missing = await _client.SendAsync(new HttpRequestMessage(HttpMethod.Post, "/api/tickets/1/approve") { Content = JsonContent.Create(new { reason = "No version" }) });
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        var stale = await PostAsync("/api/tickets/1/approve", new { expectedVersion = "AQEBAQEBAQE=" });
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        var problem = await stale.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(problem.TryGetProperty("traceId", out _));
+        Assert.Empty(_api.Data.History);
+    }
+
+    [Fact]
+    public async Task Existing_tokens_fail_after_account_access_changes()
+    {
+        await SignIn("manager@example.test");
+        var account = (await ((IUserRepository)_api.Data).GetByIdAsync(21))!;
+        account.SetActive(false);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.GetAsync("/api/tickets")).StatusCode);
+        account.SetActive(true);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.GetAsync("/api/tickets")).StatusCode);
+        await SignIn("manager@example.test");
+        account.UpdateManager("Test", "Manager", account.Email, "000", 2);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.GetAsync("/api/tickets")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Manager_cannot_correct_status_and_admin_requires_a_reason()
+    {
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync("/api/tickets/1/correct-status", new { eventId = 1, reason = "Correction" })).StatusCode);
+        await SignIn();
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/correct-status", new { eventId = 1, reason = " " })).StatusCode);
+        Assert.Empty(_api.Data.History);
+    }
+
+    [Fact]
+    public async Task Login_rate_limit_returns_429_with_retry_after_and_trace()
+    {
+        using var api = new TestApi(loginLimit: 2);
+        using var client = api.CreateClient();
+        for (var index = 0; index < 2; index++)
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login", new { email = "missing@example.test", password = "wrong" })).StatusCode);
+        var response = await client.PostAsJsonAsync("/api/auth/login", new { email = "missing@example.test", password = "wrong" });
+        Assert.Equal(HttpStatusCode.TooManyRequests, response.StatusCode);
+        Assert.NotNull(response.Headers.RetryAfter);
+        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("traceId", out _));
     }
 
     [Fact]
@@ -54,7 +125,7 @@ public class SecurityApiTests : IDisposable
     [Fact]
     public async Task Login_issues_expiring_token_and_only_public_user_metadata()
     {
-        var response = await _client.PostAsJsonAsync("/api/auth/login", new { email = "admin@example.test", password = TestApi.Password });
+        var response = await PostAsync("/api/auth/login", new { email = "admin@example.test", password = TestApi.Password });
         var json = await response.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
@@ -77,7 +148,7 @@ public class SecurityApiTests : IDisposable
     [InlineData("", "")]
     public async Task Invalid_credentials_return_401(string email, string password)
     {
-        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.PostAsJsonAsync("/api/auth/login", new { email, password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostAsync("/api/auth/login", new { email, password })).StatusCode);
     }
 
     [Theory]
@@ -110,11 +181,14 @@ public class SecurityApiTests : IDisposable
     [InlineData("missing-store")]
     [InlineData("invalid-sub")]
     [InlineData("unknown-role")]
+    [InlineData("missing-session-version")]
+    [InlineData("unknown-user")]
     public async Task Invalid_tokens_return_401(string failure)
     {
         var now = DateTime.UtcNow;
-        var claims = new[] { new Claim("sub", failure == "invalid-sub" ? "0" : "21"),
+        var claims = new[] { new Claim("sub", failure == "invalid-sub" ? "0" : failure == "unknown-user" ? "9999" : "21"),
             new Claim("role", failure == "unknown-role" ? "Technician" : "StoreManager") };
+        if (failure != "missing-session-version") claims = claims.Append(new Claim("session_version", "1")).ToArray();
         var token = new JwtSecurityToken(
             failure == "issuer" ? "wrong" : TestApi.Issuer,
             failure == "audience" ? "wrong" : TestApi.Audience,
@@ -166,12 +240,12 @@ public class SecurityApiTests : IDisposable
         await SignIn("manager@example.test");
         foreach (var action in new[] { "progress", "resolve" })
         {
-            Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync($"/api/tickets/2/{action}", new { })).StatusCode);
-            Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync($"/api/tickets/999/{action}", new { })).StatusCode);
-            Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync($"/api/tickets/1/{action}", new { changedByUserId = 999 })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await PostAsync($"/api/tickets/2/{action}", new { })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await PostAsync($"/api/tickets/999/{action}", new { })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await PostAsync($"/api/tickets/1/{action}", new { changedByUserId = 999 })).StatusCode);
         }
         Assert.All(_api.Data.History, entry => Assert.Equal(21, entry.ChangedByUserId));
-        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/tickets/1/progress", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/progress", new { })).StatusCode);
     }
 
     [Fact]
@@ -209,7 +283,7 @@ public class SecurityApiTests : IDisposable
     public async Task Manager_edits_own_ticket_without_changing_identity_or_status()
     {
         await SignIn("manager@example.test");
-        var response = await _client.PutAsJsonAsync("/api/tickets/1", new { title = " Updated ", description = " Updated description ", priority = 4, storeId = 2, createdByUserId = 999, status = 6 });
+        var response = await PutAsync("/api/tickets/1", new { title = " Updated ", description = " Updated description ", priority = 4, storeId = 2, createdByUserId = 999, status = 6 });
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         var ticket = _api.Data.Tickets.Single(ticket => ticket.Id == 1);
         Assert.Equal("Updated", ticket.Title);
@@ -218,17 +292,17 @@ public class SecurityApiTests : IDisposable
         Assert.Equal(11, ticket.CreatedByUserId);
         Assert.Equal(TicketStatus.AwaitingApproval, ticket.Status);
         Assert.Empty(_api.Data.History);
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.PutAsJsonAsync("/api/tickets/2", new { title = "Other", description = "Other", priority = 2 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PutAsync("/api/tickets/2", new { title = "Other", description = "Other", priority = 2 })).StatusCode);
     }
 
     [Fact]
     public async Task Admin_edits_any_store_and_invalid_or_missing_edits_fail()
     {
         await SignIn();
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PutAsJsonAsync("/api/tickets/2", new { title = "Fixed title", description = "Description", priority = 3 })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PutAsJsonAsync("/api/tickets/2", new { title = " ", description = "Description", priority = 3 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PutAsync("/api/tickets/2", new { title = "Fixed title", description = "Description", priority = 3 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PutAsync("/api/tickets/2", new { title = " ", description = "Description", priority = 3 })).StatusCode);
         Assert.Equal("Fixed title", _api.Data.Tickets[1].Title);
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.PutAsJsonAsync("/api/tickets/999", new { title = "Title", description = "Description", priority = 3 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PutAsync("/api/tickets/999", new { title = "Title", description = "Description", priority = 3 })).StatusCode);
     }
 
     [Theory]
@@ -238,7 +312,7 @@ public class SecurityApiTests : IDisposable
     public async Task Manager_cannot_perform_admin_actions(string action)
     {
         await SignIn("manager@example.test");
-        Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync($"/api/tickets/1/{action}", new { reason = "test" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync($"/api/tickets/1/{action}", new { reason = "test" })).StatusCode);
         Assert.Empty(_api.Data.History);
     }
 
@@ -255,9 +329,9 @@ public class SecurityApiTests : IDisposable
     public async Task Creation_uses_authenticated_actor_and_rejects_cross_store_access()
     {
         await SignIn("manager@example.test");
-        var denied = await _client.PostAsJsonAsync("/api/tickets", new { title = "Issue", description = "Broken", storeId = 2, categoryId = 1, priority = 2, createdByUserId = 999 });
+        var denied = await PostAsync("/api/tickets", new { title = "Issue", description = "Broken", storeId = 2, categoryId = 1, priority = 2, createdByUserId = 999 });
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
-        var response = await _client.PostAsJsonAsync("/api/tickets", new { title = "Issue", description = "Broken", storeId = 1, categoryId = 1, priority = 2, createdByUserId = 999 });
+        var response = await PostAsync("/api/tickets", new { title = "Issue", description = "Broken", storeId = 1, categoryId = 1, priority = 2, createdByUserId = 999 });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(21, _api.Data.Tickets.Last().CreatedByUserId);
     }
@@ -268,7 +342,7 @@ public class SecurityApiTests : IDisposable
         await SignIn();
         Assert.Equal(2, (await _client.GetFromJsonAsync<JsonElement[]>("/api/stores"))!.Length);
         Assert.Equal(2, (await _client.GetFromJsonAsync<JsonElement[]>("/api/tickets"))!.Length);
-        var response = await _client.PostAsJsonAsync("/api/tickets/1/approve", new { reason = "Approved", changedByUserId = 999 });
+        var response = await PostAsync("/api/tickets/1/approve", new { reason = "Approved", changedByUserId = 999 });
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(11, Assert.Single(_api.Data.History).ChangedByUserId);
     }
@@ -277,8 +351,8 @@ public class SecurityApiTests : IDisposable
     public async Task Assignment_records_authenticated_admin_for_both_actor_fields()
     {
         await SignIn();
-        await _client.PostAsJsonAsync("/api/tickets/1/approve", new { reason = "Approved" });
-        var response = await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, notes = "Visit", scheduledAt = DateTime.UtcNow.AddDays(1), assignedByUserId = 999, changedByUserId = 999 });
+        await PostAsync("/api/tickets/1/approve", new { reason = "Approved" });
+        var response = await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, notes = "Visit", scheduledAt = DateTime.UtcNow.AddDays(1), assignedByUserId = 999, changedByUserId = 999 });
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(11, Assert.Single(_api.Data.Assignments).AssignedByUserId);
         Assert.All(_api.Data.History, item => Assert.Equal(11, item.ChangedByUserId));
@@ -288,13 +362,13 @@ public class SecurityApiTests : IDisposable
     public async Task Assignment_validates_options_and_normalizes_visit_time_to_utc()
     {
         await SignIn();
-        await _client.PostAsJsonAsync("/api/tickets/1/approve", new { });
+        await PostAsync("/api/tickets/1/approve", new { });
         var future = DateTimeOffset.UtcNow.AddDays(1).ToOffset(TimeSpan.FromHours(3));
-        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 99, scheduledAt = future, notes = "" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(-1), notes = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 99, scheduledAt = future, notes = "" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(-1), notes = "" })).StatusCode);
         Assert.Equal(TicketStatus.Approved, _api.Data.Tickets[0].Status);
         Assert.Empty(_api.Data.Assignments);
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = future, notes = "Bring parts" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = future, notes = "Bring parts" })).StatusCode);
         Assert.Equal(future.UtcDateTime, Assert.Single(_api.Data.Assignments).ScheduledAt);
     }
 
@@ -302,9 +376,9 @@ public class SecurityApiTests : IDisposable
     public async Task Assignment_read_is_store_scoped_and_returns_saved_schedule()
     {
         await SignIn();
-        await _client.PostAsJsonAsync("/api/tickets/1/approve", new { });
+        await PostAsync("/api/tickets/1/approve", new { });
         var visit = DateTimeOffset.UtcNow.AddDays(1);
-        await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = visit, notes = "Bring parts" });
+        await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = visit, notes = "Bring parts" });
         await SignIn("manager@example.test");
         var assignment = await _client.GetFromJsonAsync<JsonElement>("/api/tickets/1/assignment");
         Assert.Equal(1, assignment.GetProperty("externalTechnicianId").GetInt32());
@@ -319,13 +393,13 @@ public class SecurityApiTests : IDisposable
     public async Task Api_can_complete_full_workflow_with_admin_and_manager_audit_actors()
     {
         await SignIn();
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/approve", new { reason = "Valid request" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(1), notes = "Visit" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/approve", new { reason = "Valid request" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(1), notes = "Visit" })).StatusCode);
         await SignIn("manager@example.test");
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/progress", new { reason = "Work started" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/resolve", new { reason = "Repaired" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/progress", new { reason = "Work started" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/resolve", new { reason = "Repaired" })).StatusCode);
         await SignIn();
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/close", new { reason = "Confirmed", changedByUserId = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/close", new { reason = "Confirmed", changedByUserId = 999 })).StatusCode);
         Assert.Equal(TicketStatus.Closed, _api.Data.Tickets[0].Status);
         Assert.Equal(5, _api.Data.History.Count);
         Assert.All(_api.Data.History.Take(2), entry => Assert.Equal(11, entry.ChangedByUserId));
@@ -337,8 +411,8 @@ public class SecurityApiTests : IDisposable
     public async Task Rejection_ends_workflow_and_records_reason()
     {
         await SignIn();
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/reject", new { reason = "Duplicate request" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/tickets/1/approve", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/reject", new { reason = "Duplicate request" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/approve", new { })).StatusCode);
         Assert.Equal("Duplicate request", Assert.Single(_api.Data.History).Reason);
     }
 
@@ -348,7 +422,7 @@ public class SecurityApiTests : IDisposable
         foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); ticket.StartProgress(); ticket.Resolve(); }
         await SignIn("manager@example.test");
         foreach (var id in new[] { 1, 2, 999 })
-            Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync($"/api/tickets/{id}/close", new { changedByUserId = 999 })).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync($"/api/tickets/{id}/close", new { changedByUserId = 999 })).StatusCode);
         Assert.All(_api.Data.Tickets, ticket => Assert.Equal(TicketStatus.Resolved, ticket.Status));
         Assert.Empty(_api.Data.History);
     }
@@ -360,11 +434,11 @@ public class SecurityApiTests : IDisposable
     {
         foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); ticket.StartProgress(); ticket.Resolve(); }
         await SignIn();
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync($"/api/tickets/{id}/close", new { changedByUserId = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync($"/api/tickets/{id}/close", new { changedByUserId = 999 })).StatusCode);
         Assert.Equal(TicketStatus.Closed, _api.Data.Tickets.Single(ticket => ticket.Id == id).Status);
         Assert.Equal(11, Assert.Single(_api.Data.History).ChangedByUserId);
-        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync($"/api/tickets/{id}/close", new { })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync("/api/tickets/999/close", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync($"/api/tickets/{id}/close", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync("/api/tickets/999/close", new { })).StatusCode);
     }
 
     [Fact]
@@ -372,10 +446,10 @@ public class SecurityApiTests : IDisposable
     {
         await SignIn();
         Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/tickets/999/history")).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/tickets/1/resolve", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/resolve", new { })).StatusCode);
     }
 
-    private sealed class TestApi(bool development = false) : WebApplicationFactory<Program>
+    private sealed class TestApi(bool development = false, int loginLimit = 1000) : WebApplicationFactory<Program>
     {
         public const string Password = "Test-only-Passw0rd!";
         public const string Issuer = "servicedesk-tests";
@@ -389,7 +463,7 @@ public class SecurityApiTests : IDisposable
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Jwt:Key"] = Key, ["Jwt:Issuer"] = Issuer, ["Jwt:Audience"] = Audience,
-                ["DemoUser:Email"] = "", ["DemoUser:Password"] = ""
+                ["DemoUser:Email"] = "", ["DemoUser:Password"] = "", ["LoginRateLimit:PermitLimit"] = loginLimit.ToString()
             }));
             builder.ConfigureServices(services =>
             {
@@ -421,6 +495,7 @@ public class SecurityApiTests : IDisposable
     private sealed class TestData : IUserRepository, ISupportTicketRepository, IReferenceDataRepository,
         ITicketStatusHistoryRepository, ITechnicianAssignmentRepository
     {
+        public bool ThrowOnList { get; set; }
         public List<SupportTicket> Tickets { get; } = [MakeTicket(1, 1), MakeTicket(2, 2)];
         public List<TicketStatusHistory> History { get; } = [];
         public List<TechnicianAssignment> Assignments { get; } = [];
@@ -439,9 +514,12 @@ public class SecurityApiTests : IDisposable
             user.SetPasswordHash(new PasswordHasher<User>().HashPassword(user, TestApi.Password));
             return user;
         }
+        Task<User?> IUserRepository.GetByIdAsync(int id) => Task.FromResult(_users.SingleOrDefault(user => user.Id == id));
+        Task<TechnicianAssignment?> ITechnicianAssignmentRepository.GetByIdAsync(int id) => Task.FromResult(Assignments.SingleOrDefault(item => item.Id == id));
+        public Task SaveAsync(TechnicianAssignment assignment) => Task.CompletedTask;
         public Task<User?> GetByEmailAsync(string email) => Task.FromResult(_users.SingleOrDefault(user => user.Email == email));
         public Task<SupportTicket?> GetByIdAsync(int id) => Task.FromResult(Tickets.SingleOrDefault(ticket => ticket.Id == id));
-        public Task<List<SupportTicket>> GetAllAsync(int? storeId = null) => Task.FromResult(Tickets.Where(ticket => !storeId.HasValue || ticket.StoreId == storeId).ToList());
+        public Task<List<SupportTicket>> GetAllAsync(int? storeId = null) => ThrowOnList ? throw new InvalidOperationException("PRIVATE_TEST_SENTINEL") : Task.FromResult(Tickets.Where(ticket => !storeId.HasValue || ticket.StoreId == storeId).ToList());
         public Task SaveAsync(SupportTicket ticket) => Task.CompletedTask;
         public Task AddAsync(SupportTicket ticket) { SetId(ticket, Tickets.Count + 1); Tickets.Add(ticket); return Task.CompletedTask; }
         public Task AddAsync(TicketStatusHistory history) { History.Add(history); return Task.CompletedTask; }

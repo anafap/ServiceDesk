@@ -9,7 +9,7 @@ namespace ServiceDesk.Infrastructure.Repositories;
 public class TechnicianAssignmentRepository : ITechnicianAssignmentRepository
 {
     public Task<TechnicianAssignment?> GetLatestByTicketIdAsync(int ticketId) =>
-        _dbContext.TechnicianAssignments.AsNoTracking().Where(assignment => assignment.SupportTicketId == ticketId)
+        _dbContext.TechnicianAssignments.AsNoTracking().Where(assignment => assignment.SupportTicketId == ticketId && assignment.WithdrawnAt == null)
             .OrderByDescending(assignment => assignment.AssignedAt).ThenByDescending(assignment => assignment.Id).FirstOrDefaultAsync();
 
     private readonly ServiceDeskDbContext _dbContext;
@@ -18,6 +18,9 @@ public class TechnicianAssignmentRepository : ITechnicianAssignmentRepository
         _dbContext = dbContext;
 
     }
+
+    public Task<TechnicianAssignment?> GetByIdAsync(int id) => _dbContext.TechnicianAssignments.SingleOrDefaultAsync(item => item.Id == id);
+    public async Task SaveAsync(TechnicianAssignment assignment) => await _dbContext.SaveChangesAsync();
 
     public async Task AddAsync(TechnicianAssignment technicianAssignment)
     {

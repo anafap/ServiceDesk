@@ -1,6 +1,6 @@
 namespace ServiceDesk.Domain.Entities;
 
-public class ExternalTechnician
+public class ExternalTechnician : VersionedEntity
 {
     public int Id { get; private set; }
     public string FullName { get; private set; } = string.Empty;

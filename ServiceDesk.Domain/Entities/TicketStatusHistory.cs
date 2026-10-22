@@ -6,6 +6,16 @@ public class TicketStatusHistory
 {
 
 
+    public int? ReversesHistoryId { get; private set; }
+    public int? TechnicianAssignmentId { get; private set; }
+
+    public void RecordCorrection(int eventId, int? assignmentId)
+    {
+        if (string.IsNullOrWhiteSpace(Reason)) throw new ArgumentException("A correction reason is required.");
+        ReversesHistoryId = eventId; TechnicianAssignmentId = assignmentId;
+    }
+    public void RecordAssignment(int assignmentId) => TechnicianAssignmentId = assignmentId;
+
     public int Id { get; private set; }
     public int SupportTicketId { get; private set; }
     public TicketStatus? PreviousStatus { get; private set; }

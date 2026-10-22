@@ -92,6 +92,12 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<string>("Specialisation")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -127,6 +133,12 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<string>("StoreCode")
                         .IsRequired()
@@ -169,6 +181,12 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.Property<int>("Priority")
                         .HasColumnType("int");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
@@ -185,6 +203,8 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.HasIndex("AssetId");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("StoreId");
 
@@ -218,7 +238,16 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.Property<int>("SupportTicketId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("WithdrawnAt")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AssignedByUserId");
+
+                    b.HasIndex("ExternalTechnicianId");
+
+                    b.HasIndex("SupportTicketId", "WithdrawnAt", "AssignedAt");
 
                     b.ToTable("TechnicianAssignments");
                 });
@@ -265,10 +294,24 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("ReversesHistoryId")
+                        .HasColumnType("int");
+
                     b.Property<int>("SupportTicketId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("TechnicianAssignmentId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ChangedByUserId");
+
+                    b.HasIndex("ReversesHistoryId");
+
+                    b.HasIndex("TechnicianAssignmentId");
+
+                    b.HasIndex("SupportTicketId", "Id");
 
                     b.ToTable("TicketStatusHistories");
                 });
@@ -291,10 +334,22 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)")
+                        .HasComputedColumnSql("UPPER(LTRIM(RTRIM([Email])))", true);
 
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(512)
@@ -308,12 +363,26 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SessionVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<int?>("StoreId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedEmail")
                         .IsUnique();
 
                     b.HasIndex("StoreId");
@@ -343,11 +412,63 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("ServiceDesk.Domain.Entities.Store", null)
                         .WithMany()
                         .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TechnicianAssignment", b =>
+                {
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.ExternalTechnician", null)
+                        .WithMany()
+                        .HasForeignKey("ExternalTechnicianId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("SupportTicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketStatusHistory", b =>
+                {
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ChangedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.TicketStatusHistory", null)
+                        .WithMany()
+                        .HasForeignKey("ReversesHistoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ServiceDesk.Domain.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("SupportTicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.TechnicianAssignment", null)
+                        .WithMany()
+                        .HasForeignKey("TechnicianAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("ServiceDesk.Domain.Entities.User", b =>

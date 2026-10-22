@@ -27,7 +27,6 @@ public class SupportTicketRepository : ISupportTicketRepository
 
     public async Task SaveAsync(SupportTicket ticket)
     {
-        _dbContext.SupportTickets.Update(ticket);
         await _dbContext.SaveChangesAsync();
     }
 

@@ -41,12 +41,12 @@ public class AdministrationTests
         await using var context = database.OpenContext();
         var service = new AdministrationService(new AdministrationRepository(context));
         var store = await service.SaveStoreAsync(null, new(" new-code ", "New store", "Address", "City"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveStoreAsync(null, new("NEW-code", "Duplicate", "Address", "City")));
-        await service.SaveStoreAsync(store.Id, new("new-code", "Edited store", "Address", "City"));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.SaveStoreAsync(null, new("NEW-code", "Duplicate", "Address", "City")));
+        await service.SaveStoreAsync(store.Id, new("new-code", "Edited store", "Address", "City", store.Version));
         var ticket = await database.AddTicketAsync(context, Domain.Enums.TicketStatus.Approved);
         await service.SetStoreActiveAsync(database.StoreId, false);
         var technician = await service.SaveTechnicianAsync(null, new("Demo contact", "Company", "000", "General"));
-        await service.SaveTechnicianAsync(technician.Id, new("Edited contact", "Company", "123", "HVAC"));
+        await service.SaveTechnicianAsync(technician.Id, new("Edited contact", "Company", "123", "HVAC", technician.Version));
         await service.SetTechnicianActiveAsync(technician.Id, false);
         var references = new ReferenceRepository(context);
         Assert.DoesNotContain(await references.GetStoreAsync(), item => item.Id == database.StoreId);

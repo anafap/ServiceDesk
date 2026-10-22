@@ -180,7 +180,7 @@ public class SupportTicketTests
         ticket.Approve();
 
         // Act and Assert
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.ThrowsAny<InvalidOperationException>(() =>
             ticket.Approve());
     }
 
@@ -222,7 +222,7 @@ public class SupportTicketTests
             TicketPriority.High);
 
         // Act and Assert
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.ThrowsAny<InvalidOperationException>(() =>
             ticket.Assign());
     }
     [Fact]
@@ -241,7 +241,7 @@ public class SupportTicketTests
         ticket.Reject();
 
         // Act and Assert
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.ThrowsAny<InvalidOperationException>(() =>
             ticket.Assign());
     }
     [Fact]
@@ -259,7 +259,7 @@ public class SupportTicketTests
         ticket.Approve();
 
         // Act and Assert
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.ThrowsAny<InvalidOperationException>(() =>
             ticket.Resolve());
     }
     [Fact]
@@ -282,7 +282,7 @@ public class SupportTicketTests
         ticket.Close();
         // Act and Assert
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.ThrowsAny<InvalidOperationException>(() =>
             ticket.Close());
     }
 

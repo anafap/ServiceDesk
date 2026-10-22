@@ -1,180 +1,102 @@
+using ServiceDesk.Domain.Exceptions;
 using ServiceDesk.Application.Interfaces;
 using ServiceDesk.Domain.Entities;
 using ServiceDesk.Domain.Enums;
 
 namespace ServiceDesk.Application.Services;
 
-public class TicketService
+public class TicketService(ISupportTicketRepository tickets, ITechnicianAssignmentRepository assignments,
+    ITicketStatusHistoryRepository history, IWorkflowTransaction transaction)
 {
-    private readonly IWorkflowTransaction _workflowTransaction;
-    private readonly ISupportTicketRepository _ticketRepository;
-    private readonly ITicketStatusHistoryRepository _historyRepository;
-
-    private readonly ITechnicianAssignmentRepository _assignmentRepository;
-
-    public TicketService(ISupportTicketRepository ticketRepository,
-        ITechnicianAssignmentRepository assignmentRepository,
-        ITicketStatusHistoryRepository historyRepository,
-        IWorkflowTransaction workflowTransaction)
+    private async Task<SupportTicket> LoadAsync(int id, string? expectedVersion)
     {
-        _workflowTransaction = workflowTransaction;
-        _ticketRepository = ticketRepository;
-        _assignmentRepository = assignmentRepository;
-        _historyRepository = historyRepository;
-
-    }
-
-    public async Task ApproveTicketAsync(int ticketId, int changedByUserId, string? reason)
-    {
-        await _workflowTransaction.ExecuteAsync(async () =>
-        {
-            var ticket = await
-            _ticketRepository.GetByIdAsync(ticketId);
-
-            if (ticket is null)
-                throw new KeyNotFoundException(
-                    $"Ticket with ID {ticketId} was not found.");
-
-            var previousStatus = ticket.Status;
-
-            ticket.Approve();
-            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-
-            await _ticketRepository.SaveAsync(ticket);
-            await _historyRepository.AddAsync(history);
-        });
-    }
-
-    public async Task RejectTicketAsync(int ticketId, int changedByUserId, string? reason)
-    {
-        await _workflowTransaction.ExecuteAsync(async () =>
-        {
-            var ticket = await
-            _ticketRepository.GetByIdAsync(ticketId);
-
-            if (ticket is null)
-                throw new KeyNotFoundException(
-                    $"Ticket with ID {ticketId} was not found.");
-
-            var previousStatus = ticket.Status;
-            ticket.Reject();
-            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-
-
-            await _ticketRepository.SaveAsync(ticket);
-            await _historyRepository.AddAsync(history);
-        });
-    }
-    public async Task AssignTicketAsync(int ticketId, int externaltechnicianId, int assignedByUserId, DateTime scheduledAt, string notes, int changedByUserId, string? reason)
-    {
-        await _workflowTransaction.ExecuteAsync(async () =>
-        {
-            var ticket = await
-            _ticketRepository.GetByIdAsync(ticketId);
-
-            if (ticket is null)
-                throw new KeyNotFoundException(
-                    $"Ticket with ID {ticketId} was not found.");
-            var assignment = new TechnicianAssignment(ticketId, externaltechnicianId, assignedByUserId, scheduledAt, notes);
-            var previousStatus = ticket.Status;
-            ticket.Assign();
-            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-
-            await _ticketRepository.SaveAsync(ticket);
-            await _assignmentRepository.AddAsync(assignment);
-            await _historyRepository.AddAsync(history);
-        });
-    }
-    public async Task<SupportTicket> CreateTicketAsync(string title, string description, int createdByUserId, int categoryId, int storeId,
-        TicketPriority priority)
-    {
-        var ticket = new SupportTicket(title, description, createdByUserId, categoryId, storeId, priority);
-
-        await _ticketRepository.AddAsync(ticket);
+        var ticket = await tickets.GetByIdAsync(id) ?? throw new KeyNotFoundException($"Ticket with ID {id} was not found.");
+        if (expectedVersion is not null) ticket.EnsureVersion(expectedVersion);
         return ticket;
     }
 
-    public async Task StartProgressTicketAsync(int ticketId, int changedByUserId, string? reason)
-    {
-        await _workflowTransaction.ExecuteAsync(async () =>
+    private Task TransitionAsync(int id, int actor, string? reason, Action<SupportTicket> change, string? expectedVersion) =>
+        transaction.ExecuteAsync(async () =>
         {
-            var ticket = await
-            _ticketRepository.GetByIdAsync(ticketId);
-
-            if (ticket is null)
-                throw new KeyNotFoundException(
-                    $"Ticket with ID {ticketId} was not found.");
-
-            var previousStatus = ticket.Status;
-            ticket.StartProgress();
-            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-
-            await _ticketRepository.SaveAsync(ticket);
-            await _historyRepository.AddAsync(history);
+            var ticket = await LoadAsync(id, expectedVersion);
+            var previous = ticket.Status;
+            change(ticket);
+            await tickets.SaveAsync(ticket);
+            await history.AddAsync(new TicketStatusHistory(id, previous, ticket.Status, actor, reason));
         });
-    }
-    public async Task ResolveTicketAsync(int ticketId, int changedByUserId, string? reason)
+
+    public Task ApproveTicketAsync(int ticketId, int changedByUserId, string? reason, string? expectedVersion = null) =>
+        TransitionAsync(ticketId, changedByUserId, reason, ticket => ticket.Approve(), expectedVersion);
+    public Task RejectTicketAsync(int ticketId, int changedByUserId, string? reason, string? expectedVersion = null) =>
+        TransitionAsync(ticketId, changedByUserId, reason, ticket => ticket.Reject(), expectedVersion);
+    public Task StartProgressTicketAsync(int ticketId, int changedByUserId, string? reason, string? expectedVersion = null) =>
+        TransitionAsync(ticketId, changedByUserId, reason, ticket => ticket.StartProgress(), expectedVersion);
+    public Task ResolveTicketAsync(int ticketId, int changedByUserId, string? reason, string? expectedVersion = null) =>
+        TransitionAsync(ticketId, changedByUserId, reason, ticket => ticket.Resolve(), expectedVersion);
+    public Task CloseTicketAsync(int ticketId, int changedByUserId, string? reason, string? expectedVersion = null) =>
+        TransitionAsync(ticketId, changedByUserId, reason, ticket => ticket.Close(), expectedVersion);
+
+    public Task AssignTicketAsync(int ticketId, int externaltechnicianId, int assignedByUserId, DateTime scheduledAt,
+        string notes, int changedByUserId, string? reason, string? expectedVersion = null) => transaction.ExecuteAsync(async () =>
     {
-        await _workflowTransaction.ExecuteAsync(async () =>
+        var ticket = await LoadAsync(ticketId, expectedVersion);
+        var assignment = new TechnicianAssignment(ticketId, externaltechnicianId, assignedByUserId, scheduledAt, notes);
+        var previous = ticket.Status;
+        ticket.Assign();
+        await tickets.SaveAsync(ticket);
+        await assignments.AddAsync(assignment);
+        var entry = new TicketStatusHistory(ticketId, previous, ticket.Status, changedByUserId, reason);
+        entry.RecordAssignment(assignment.Id);
+        await history.AddAsync(entry);
+    });
+
+    public Task CorrectStatusAsync(int id, int eventId, int actor, string reason, string expectedVersion) => transaction.ExecuteAsync(async () =>
+    {
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 2000) throw new ArgumentException("A correction reason of at most 2,000 characters is required.");
+        var ticket = await LoadAsync(id, expectedVersion);
+        var latest = (await history.GetByTicketId(id)).LastOrDefault();
+        if (latest is null || latest.Id != eventId || latest.NewStatus != ticket.Status || latest.PreviousStatus is null)
+            throw new StateConflictException("The status event changed or cannot be corrected. Refresh ticket details.");
+        var previous = ticket.Status;
+        int? assignmentId = latest.TechnicianAssignmentId;
+        if (previous == TicketStatus.Assigned && latest.PreviousStatus == TicketStatus.Approved)
         {
-            var ticket = await
-            _ticketRepository.GetByIdAsync(ticketId);
-
-            if (ticket is null)
-                throw new KeyNotFoundException(
-                    $"Ticket with ID {ticketId} was not found.");
-
-            var previousStatus = ticket.Status;
-            ticket.Resolve();
-            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-            await _ticketRepository.SaveAsync(ticket);
-            await _historyRepository.AddAsync(history);
-        });
-    }
-    public async Task CloseTicketAsync(int ticketId, int changedByUserId, string? reason)
-    {
-        await _workflowTransaction.ExecuteAsync(async () =>
+            var active = await assignments.GetLatestByTicketIdAsync(id) ?? throw new StateConflictException("The current assignment is missing.");
+            assignmentId = active.Id;
+            var tracked = await assignments.GetByIdAsync(active.Id) ?? throw new StateConflictException("The current assignment is missing.");
+            tracked.Withdraw();
+            await assignments.SaveAsync(tracked);
+        }
+        else if (previous == TicketStatus.Approved && latest.PreviousStatus == TicketStatus.Assigned)
         {
-            var ticket = await
-            _ticketRepository.GetByIdAsync(ticketId);
+            if (assignmentId is null) throw new StateConflictException("The recorded assignment cannot be restored.");
+            var assignment = await assignments.GetByIdAsync(assignmentId.Value);
+            if (assignment is null || assignment.SupportTicketId != id) throw new StateConflictException("The recorded assignment cannot be restored.");
+            assignment.Restore();
+            await assignments.SaveAsync(assignment);
+        }
+        ticket.CorrectStatus(latest.PreviousStatus.Value);
+        await tickets.SaveAsync(ticket);
+        var correction = new TicketStatusHistory(id, previous, ticket.Status, actor, reason.Trim());
+        correction.RecordCorrection(latest.Id, assignmentId);
+        await history.AddAsync(correction);
+    });
 
-            if (ticket is null)
-                throw new KeyNotFoundException(
-                    $"Ticket with ID {ticketId} was not found.");
-
-            var previousStatus = ticket.Status;
-            ticket.Close();
-            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-            await _ticketRepository.SaveAsync(ticket);
-            await _historyRepository.AddAsync(history);
-        });
-    }
-
-    public async Task UpdateTicketDetailsAsync(int ticketId, string title, string description, TicketPriority priority)
+    public async Task<SupportTicket> CreateTicketAsync(string title, string description, int createdByUserId, int categoryId, int storeId, TicketPriority priority)
     {
-        var ticket = await _ticketRepository.GetByIdAsync(ticketId)
-            ?? throw new KeyNotFoundException($"Ticket with ID {ticketId} was not found.");
+        var ticket = new SupportTicket(title, description, createdByUserId, categoryId, storeId, priority);
         ticket.UpdateDetails(title, description, priority);
-        await _ticketRepository.SaveAsync(ticket);
+        await tickets.AddAsync(ticket);
+        return ticket;
     }
-
-    public async Task<List<SupportTicket>> GetAllTicketsAsync(int? storeId = null)
+    public async Task UpdateTicketDetailsAsync(int ticketId, string title, string description, TicketPriority priority, string? expectedVersion = null)
     {
-        return await _ticketRepository.GetAllAsync(storeId);
+        var ticket = await LoadAsync(ticketId, expectedVersion);
+        ticket.UpdateDetails(title, description, priority);
+        await tickets.SaveAsync(ticket);
     }
-    public Task<SupportTicket?> GetTicketByIdAsync(int ticketId)
-    {
-        return _ticketRepository.GetByIdAsync(ticketId);
-    }
-
-    public Task<TechnicianAssignment?> GetLatestAssignmentAsync(int ticketId) =>
-        _assignmentRepository.GetLatestByTicketIdAsync(ticketId);
-
-    public async Task<List<TicketStatusHistory>> GetHistoryByTicketIdAsync(int ticketId)
-    {
-        return await _historyRepository.GetByTicketId(ticketId);
-    }
-
-
+    public Task<List<SupportTicket>> GetAllTicketsAsync(int? storeId = null) => tickets.GetAllAsync(storeId);
+    public Task<SupportTicket?> GetTicketByIdAsync(int ticketId) => tickets.GetByIdAsync(ticketId);
+    public Task<TechnicianAssignment?> GetLatestAssignmentAsync(int ticketId) => assignments.GetLatestByTicketIdAsync(ticketId);
+    public Task<List<TicketStatusHistory>> GetHistoryByTicketIdAsync(int ticketId) => history.GetByTicketId(ticketId);
 }
-
