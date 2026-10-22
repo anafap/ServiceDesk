@@ -4,9 +4,11 @@ import { PageHeader } from './components/PageHeader'
 import { OverviewPage } from './pages/OverviewPage'
 import { TicketsPage } from './pages/TicketsPage'
 import { TicketDetailsPage } from './pages/TicketDetailsPage'
+import { AdministrationPage } from './pages/AdministrationPage'
 import { LoginPage } from './pages/LoginPage'
 import { useSession } from './auth/useSession'
 import { setSession } from './auth/session'
+import { displayName } from './utils/displayNames'
 import { useEffect } from 'react'
 import './App.css'
 
@@ -41,6 +43,10 @@ function App() {
           <nav className="primary-nav" aria-label="Main navigation">
             <NavLink to="/" end><AppIcon name="overview" />Overview</NavLink>
             <NavLink to="/tickets"><AppIcon name="tickets" />Tickets</NavLink>
+            {session.user.role === 'Admin' && <>
+              <NavLink to="/admin/stores"><AppIcon name="overview" />Stores</NavLink>
+              <NavLink to="/admin/technicians"><AppIcon name="tickets" />Technicians</NavLink>
+            </>}
           </nav>
           <div className="sidebar-footer">
             <span className="footer-mark"><AppIcon name="brand" /></span>
@@ -49,7 +55,7 @@ function App() {
         </aside>
         <div className="workspace">
           <header className="topbar">
-            <span>Store maintenance workspace</span>
+            <span>{session.user.role === 'Admin' ? 'Administration · All stores' : `Store workspace · ${displayName(session.user.storeName, `Store #${session.user.storeId}`)}`}</span>
             <div className="session-actions"><span>{session.user.name} · {session.user.role === 'StoreManager' ? 'Store manager' : 'Admin'}</span>
               <button className="button button-secondary" type="button" onClick={() => setSession(null)}>Sign out</button></div>
           </header>
@@ -58,6 +64,8 @@ function App() {
               <Route path="/" element={<OverviewPage />} />
               <Route path="/tickets" element={<TicketsPage />} />
               <Route path="/tickets/:ticketId" element={<TicketDetailsPage />} />
+              <Route path="/admin/stores" element={<AdministrationPage kind="stores" />} />
+              <Route path="/admin/technicians" element={<AdministrationPage kind="external-technicians" />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </main>

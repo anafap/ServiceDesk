@@ -16,7 +16,7 @@ public sealed class JwtSettings
     public string Audience { get; set; } = "";
 }
 
-public record AuthUser(int Id, string Name, string Role, int? StoreId);
+public record AuthUser(int Id, string Name, string Role, int? StoreId, string? StoreName = null);
 public record LoginResponse(string AccessToken, string TokenType, DateTime ExpiresAt, AuthUser User);
 
 public sealed class JwtTokenService(IOptions<JwtSettings> configured)

@@ -1,3 +1,4 @@
+import { displayName } from '../utils/displayNames'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { getTicketDetails, getTicketHistory, parseTicketId, TicketNotFoundError } from '../api/ticketDetails'
@@ -62,7 +63,7 @@ function TicketHistory({ ticketId }: { ticketId: number }) {
         ? <EmptyState icon="tickets" title="No status changes yet" description="No status changes have been recorded for this ticket." />
         : <ol className="history-list">{state.entries.map((entry) => <li key={entry.id}>
             <p className="history-transition">{entry.previousStatus === null ? 'Initial status' : statusLabels[entry.previousStatus]} → <strong>{statusLabels[entry.newStatus]}</strong></p>
-            <p className="history-meta"><time dateTime={utcTimestamp(entry.changedAt)}>{formatUtcDateTime(entry.changedAt)} UTC</time><span>Recorded by user #{entry.changedByUserId}</span></p>
+            <p className="history-meta"><time dateTime={utcTimestamp(entry.changedAt)}>{formatUtcDateTime(entry.changedAt)} UTC</time><span>Recorded by {displayName(entry.changedByName, `User #${entry.changedByUserId}`)}</span></p>
             <p className="history-reason">{entry.reason.trim() ? entry.reason : 'No reason recorded.'}</p>
           </li>)}</ol>)}
     </section>
@@ -114,9 +115,9 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
           <dl className="ticket-metadata">
             <div><dt>Status</dt><dd><span className={`status-tag status-${ticket.status}`}>{statusLabels[ticket.status]}</span></dd></div>
             <div><dt>Priority</dt><dd><span className={`priority-tag priority-${ticket.priority}`}>{priorityLabels[ticket.priority]}</span></dd></div>
-            <div><dt>Store</dt><dd>Store #{ticket.storeId}</dd></div>
-            <div><dt>Category</dt><dd>Category #{ticket.categoryId}</dd></div>
-            <div><dt>Created by</dt><dd>User #{ticket.createdByUserId}</dd></div>
+            <div><dt>Store</dt><dd>{displayName(ticket.storeName, `Store #${ticket.storeId}`)}</dd></div>
+            <div><dt>Category</dt><dd>{displayName(ticket.categoryName, `Category #${ticket.categoryId}`)}</dd></div>
+            <div><dt>Created by</dt><dd>{displayName(ticket.createdByName, `User #${ticket.createdByUserId}`)}</dd></div>
             <div><dt>Created (UTC)</dt><dd><time dateTime={utcTimestamp(ticket.createdAt)}>{formatUtcDateTime(ticket.createdAt)}</time></dd></div>
             {ticket.assetId !== null && <div><dt>Asset</dt><dd>Asset #{ticket.assetId}</dd></div>}
           </dl>

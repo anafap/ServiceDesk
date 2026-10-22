@@ -20,11 +20,22 @@ public class ExternalTechnician
         if (string.IsNullOrWhiteSpace(specialisation))
             throw new ArgumentException("Specialisation is required.", nameof(specialisation));
 
-        FullName = fullName;
-        CompanyName = companyName;
-        PhoneNumber = phoneNumber;
-        Specialisation = specialisation;
+        UpdateDetails(fullName, companyName, phoneNumber, specialisation);
     }
 
 
+    public void UpdateDetails(string fullName, string companyName, string phoneNumber, string specialisation)
+    {
+        FullName = Required(fullName, 200, "Full name");
+        CompanyName = Required(companyName, 200, "Company name");
+        PhoneNumber = Required(phoneNumber, 20, "Phone number");
+        Specialisation = Required(specialisation, 200, "Specialisation");
+    }
+    public void SetActive(bool active) => IsActive = active;
+    private static string Required(string value, int maximum, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Trim().Length > maximum)
+            throw new ArgumentException($"{field} is required and must be at most {maximum} characters.");
+        return value.Trim();
+    }
 }

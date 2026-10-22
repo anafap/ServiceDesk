@@ -141,6 +141,24 @@ public class SecurityApiTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/tickets/1/history")).StatusCode);
     }
 
+    [Theory]
+    [InlineData("GET", "/api/admin/stores")]
+    [InlineData("POST", "/api/admin/stores")]
+    [InlineData("PUT", "/api/admin/stores/1")]
+    [InlineData("PATCH", "/api/admin/stores/1/status")]
+    [InlineData("GET", "/api/admin/external-technicians")]
+    [InlineData("POST", "/api/admin/external-technicians")]
+    [InlineData("PUT", "/api/admin/external-technicians/1")]
+    [InlineData("PATCH", "/api/admin/external-technicians/1/status")]
+    public async Task Administration_requires_admin(string method, string path)
+    {
+        using var anonymous = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { }) };
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.SendAsync(anonymous)).StatusCode);
+        await SignIn("manager@example.test");
+        using var manager = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { }) };
+        Assert.Equal(HttpStatusCode.Forbidden, (await _client.SendAsync(manager)).StatusCode);
+    }
+
     [Fact]
     public async Task Manager_can_progress_and_resolve_own_store_only_with_trusted_actor()
     {
@@ -366,12 +384,21 @@ public class SecurityApiTests : IDisposable
                 services.AddSingleton<IUserRepository>(Data);
                 services.RemoveAll<IWorkflowTransaction>();
                 services.AddSingleton<IWorkflowTransaction, FakeWorkflowTransaction>();
+                services.RemoveAll<IDisplayNameRepository>();
+                services.AddSingleton<IDisplayNameRepository, TestDisplayNames>();
                 services.AddSingleton<ISupportTicketRepository>(Data);
                 services.AddSingleton<IReferenceDataRepository>(Data);
                 services.AddSingleton<ITicketStatusHistoryRepository>(Data);
                 services.AddSingleton<ITechnicianAssignmentRepository>(Data);
             });
         }
+    }
+
+    private sealed class TestDisplayNames : IDisplayNameRepository
+    {
+        public Task<DisplayNames> GetAsync(int[] stores, int[] categories, int[] users, int[] technicians) => Task.FromResult(new DisplayNames(
+            stores.ToDictionary(id => id, id => $"Store {id}"), categories.ToDictionary(id => id, id => "Maintenance"),
+            users.ToDictionary(id => id, id => $"User {id}"), technicians.ToDictionary(id => id, id => $"Technician {id}")));
     }
 
     private sealed class TestData : IUserRepository, ISupportTicketRepository, IReferenceDataRepository,

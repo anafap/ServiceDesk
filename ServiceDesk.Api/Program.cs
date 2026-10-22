@@ -37,6 +37,9 @@ builder.Services.AddScoped<ITicketStatusHistoryRepository, TicketStatusHistoryRe
 builder.Services.AddScoped<IReferenceDataRepository, ReferenceRepository>();
 
 builder.Services.AddScoped<IWorkflowTransaction, WorkflowTransaction>();
+builder.Services.AddScoped<IAdministrationRepository, AdministrationRepository>();
+builder.Services.AddScoped<AdministrationService>();
+builder.Services.AddScoped<IDisplayNameRepository, DisplayNameRepository>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<ReferenceService>();
 
@@ -92,6 +95,14 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+if (args.Contains("--seed-demo"))
+{
+    if (!app.Environment.IsDevelopment()) throw new InvalidOperationException("Demo provisioning is allowed only in Development.");
+    await ServiceDesk.Api.Development.DemoDataSeeder.SeedAsync(app.Services, app.Configuration);
+    Console.WriteLine("Demo provisioning completed. Existing credentials were not reset.");
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -123,15 +134,19 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapPost("/api/auth/login", async (LoginRequest request, LoginService login, JwtTokenService tokens, HttpResponse response) =>
+app.MapPost("/api/auth/login", async (LoginRequest request, LoginService login, JwtTokenService tokens, HttpResponse response, IDisplayNameRepository display) =>
 {
     response.Headers.CacheControl = "no-store";
     response.Headers.Pragma = "no-cache";
     var user = await login.AuthenticateAsync(request.Email, request.Password);
-    return user is null ? Results.Unauthorized() : Results.Ok(tokens.Issue(user));
+    if (user is null) return Results.Unauthorized();
+    var names = await display.GetAsync(user.StoreId.HasValue ? [user.StoreId.Value] : [], [], [], []);
+    var session = tokens.Issue(user);
+    return Results.Ok(session with { User = session.User with { StoreName = user.StoreId.HasValue ? names.Stores.GetValueOrDefault(user.StoreId.Value) : null } });
 }).AllowAnonymous();
 
 app.MapServiceDeskEndpoints();
+app.MapAdministrationEndpoints();
 app.Run();
 
 public record LoginRequest(string Email, string Password);

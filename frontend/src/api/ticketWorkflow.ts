@@ -1,9 +1,11 @@
+import { validDisplayNames } from '../utils/displayNames.ts'
 import { apiFetch } from './http.ts'
 
 export type WorkflowAction = 'approve' | 'reject' | 'assign' | 'progress' | 'resolve' | 'close'
 export type Technician = { id: number; fullName: string; companyName: string }
 export type Assignment = {
   id: number; supportTicketId: number; externalTechnicianId: number; assignedByUserId: number
+  technicianName?: string | null; assignedByName?: string | null
   assignedAt: string; scheduledAt: string | null; notes: string
 }
 export type AssignmentRequest = { externalTechnicianId: number; scheduledAt: string; notes: string; reason: string | null }
@@ -28,7 +30,7 @@ export async function getAssignment(ticketId: number, signal: AbortSignal): Prom
   const data: unknown = await response.json()
   if (typeof data !== 'object' || data === null) throw new Error('Unexpected assignment data.')
   const assignment = data as Record<string, unknown>
-  if (assignment.supportTicketId !== ticketId
+  if (!validDisplayNames(assignment, ['technicianName', 'assignedByName']) || assignment.supportTicketId !== ticketId
     || ![assignment.id, assignment.externalTechnicianId, assignment.assignedByUserId].every(value => typeof value === 'number' && Number.isInteger(value) && value > 0)
     || typeof assignment.assignedAt !== 'string' || Number.isNaN(Date.parse(assignment.assignedAt))
     || (assignment.scheduledAt !== null && (typeof assignment.scheduledAt !== 'string' || Number.isNaN(Date.parse(assignment.scheduledAt))))

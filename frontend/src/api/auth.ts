@@ -1,3 +1,4 @@
+import { validDisplayNames } from '../utils/displayNames.ts'
 import type { AuthSession } from '../auth/session'
 
 export async function login(email: string, password: string, signal: AbortSignal): Promise<AuthSession> {
@@ -16,7 +17,7 @@ export async function login(email: string, password: string, signal: AbortSignal
     || typeof result.expiresAt !== 'string' || !(Date.parse(result.expiresAt) > Date.now())
     || typeof result.user !== 'object' || result.user === null) throw new Error('Unexpected sign-in response.')
   const user = result.user as Record<string, unknown>
-  if (typeof user.id !== 'number' || !Number.isInteger(user.id) || user.id <= 0 || typeof user.name !== 'string'
+  if (!validDisplayNames(user, ['storeName']) || typeof user.id !== 'number' || !Number.isInteger(user.id) || user.id <= 0 || typeof user.name !== 'string'
     || !['Admin', 'StoreManager'].includes(String(user.role))
     || (user.role === 'Admin' ? user.storeId !== null : typeof user.storeId !== 'number' || !Number.isInteger(user.storeId) || user.storeId <= 0)) {
     throw new Error('Unexpected sign-in response.')

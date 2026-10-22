@@ -1,4 +1,4 @@
-export type AuthUser = { id: number; name: string; role: 'Admin' | 'StoreManager'; storeId: number | null }
+export type AuthUser = { id: number; name: string; role: 'Admin' | 'StoreManager'; storeId: number | null; storeName?: string | null }
 export type AuthSession = { accessToken: string; expiresAt: string; user: AuthUser }
 
 let session: AuthSession | null = null
