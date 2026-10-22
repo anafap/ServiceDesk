@@ -30,7 +30,7 @@ routing and a separately configured API route.
   clear filters, and creation using active stores/categories.
 - Details supports title/description/priority editing and role/status-aware
   lifecycle actions, plus saved technician assignment and chronological history.
-- Admins alone approve/reject/assign; both roles can progress/resolve/close, with
+- Admins alone approve/reject/assign/close; both roles can progress/resolve, with
   manager access limited to the assigned store by the API.
 - Admin-only Stores and Technicians pages provide list/create/edit/deactivate/
   reactivate. No physical deletion, technician accounts or account-management UI.

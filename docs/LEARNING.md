@@ -4,7 +4,7 @@
 
 | Change | Significant code | Why it exists |
 |---|---|---|
-| Manager repair verification | `ServiceDeskEndpoints`, frontend `ticketWorkflow` rules, security tests | Both UI and API allow own-store progress/resolve/close; the server remains authoritative. |
+| Manager repair verification | `ServiceDeskEndpoints`, frontend `ticketWorkflow` rules, security tests | Managers can progress/resolve own-store tickets; only Admin can close. The server remains authoritative. |
 | Administration | `AdministrationService`, `AdministrationRepository`, `AdministrationPage` | Separates validated business operations, SQL persistence, and interactive forms. |
 | Readable references | `DisplayNameRepository`, ticket/session response DTOs, frontend display helpers | Resolves only authorized reference IDs, retaining history for inactive records. |
 | Demo provisioning | `DemoDataSeeder`, SQL seed tests | Creates reproducible two-store data and hashed accounts without resetting passwords or duplicating edited tickets. |

@@ -45,7 +45,8 @@ AwaitingApproval → Approved → Assigned → InProgress → Resolved → Close
 | Dashboard/list/detail/history/assignment | All stores | Assigned store only |
 | Create/edit tickets | All stores | Assigned store only |
 | Approve/reject/assign technician | Yes | No |
-| Start progress / resolve / close | All stores | Assigned store only |
+| Start progress / resolve | All stores | Assigned store only |
+| Close resolved tickets | All stores | No |
 | Manage stores and technicians | Yes | No |
 
 The API checks store access before manager reads/writes. Missing and inaccessible
@@ -107,7 +108,7 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-Latest feature checks: **108 backend tests passed with SQL enabled**, zero skips;
+Latest feature checks: **110 backend tests passed with SQL enabled**, zero skips;
 **59 frontend tests passed**; builds/lint passed. Database-free backend runs skip
 SQL cases explicitly. Tests are verification evidence, not a replacement for
 browser review of newly added screens. A clean local clone successfully restored

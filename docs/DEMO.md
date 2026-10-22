@@ -18,8 +18,9 @@ writes use SQL transactions, verified with real rollback tests.
 3. Sign in as Manager2. Confirm the other store's ticket is absent; its direct
    detail URL returns the unavailable/not-found view.
 4. Return as Manager1. Start progress when work begins, mark resolved after
-   checking the repair, then close the request. Explain that these transitions
-   must happen in sequence and the API enforces the same rules as the UI.
+   checking the repair. Sign back in as Admin to close the resolved request.
+   Explain that transitions must happen in sequence and the API enforces the
+   same role rules as the UI.
 5. Show named actors, technician, and UTC timestamps in assignment/history.
 6. As Admin, create/edit a demo store and technician. Deactivate/reactivate them.
    Explain that inactive records are excluded from new work but retained in history.
