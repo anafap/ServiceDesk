@@ -22,10 +22,21 @@ public class Store
         if (string.IsNullOrWhiteSpace(address))
             throw new ArgumentException("Address is required.", nameof(address));
 
-        StoreCode = storeCode;
-        Name = name;
-        City = city;
-        Address = address;
+        UpdateDetails(storeCode, name, address, city);
     }
 
+    public void UpdateDetails(string storeCode, string name, string address, string city)
+    {
+        StoreCode = Required(storeCode, 50, "Store code").ToUpperInvariant();
+        Name = Required(name, 50, "Name");
+        Address = Required(address, 50, "Address");
+        City = Required(city, 500, "City");
+    }
+    public void SetActive(bool active) => IsActive = active;
+    private static string Required(string value, int maximum, string field)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Trim().Length > maximum)
+            throw new ArgumentException($"{field} is required and must be at most {maximum} characters.");
+        return value.Trim();
+    }
 }

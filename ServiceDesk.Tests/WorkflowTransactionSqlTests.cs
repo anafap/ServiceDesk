@@ -103,7 +103,7 @@ public sealed class WorkflowTransactionSqlTests
         _ => throw new ArgumentOutOfRangeException(nameof(next)),
     };
 
-    private sealed class TestDatabase : IAsyncDisposable
+    internal sealed class TestDatabase : IAsyncDisposable
     {
         private readonly DbContextOptions<ServiceDeskDbContext> _options;
         public int StoreId { get; private set; }

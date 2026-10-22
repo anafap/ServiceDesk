@@ -1,3 +1,5 @@
+import { useSession } from '../auth/useSession'
+import { displayName } from '../utils/displayNames'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { getTickets, priorityLabels, statusLabels } from '../api/tickets'
@@ -13,6 +15,7 @@ type OverviewState =
   | { status: 'error'; message: string }
 
 export function OverviewPage() {
+  const session = useSession()
   const [state, setState] = useState<OverviewState>({ status: 'loading' })
   const [requestVersion, setRequestVersion] = useState(0)
 
@@ -44,7 +47,7 @@ export function OverviewPage() {
 
   return (
     <>
-      <PageHeader eyebrow="YOUR WORKSPACE" title="Workspace overview" description="Monitor the maintenance tickets you have access to." />
+      <PageHeader eyebrow="YOUR WORKSPACE" title={session?.user.role === 'StoreManager' ? 'My store overview' : 'Workspace overview'} description={session?.user.role === 'StoreManager' ? `Maintenance for ${displayName(session.user.storeName, `Store #${session.user.storeId}`)}.` : 'Monitor maintenance across all stores.'} />
       <div className="page-actions">
         <button className="button button-secondary" type="button" disabled={state.status === 'loading'} onClick={refresh}>Refresh dashboard</button>
         <Link className="button button-primary" to="/tickets">View all tickets</Link>

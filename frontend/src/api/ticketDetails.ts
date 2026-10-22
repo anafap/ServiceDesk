@@ -1,3 +1,4 @@
+import { validDisplayNames } from '../utils/displayNames.ts'
 import { apiFetch } from './http.ts'
 import { isTicket, statusLabels } from './tickets.ts'
 import type { Ticket, TicketStatus } from './tickets.ts'
@@ -8,6 +9,7 @@ export type TicketHistoryEntry = {
   supportTicketId: number
   previousStatus: TicketStatus | null
   newStatus: TicketStatus
+  changedByName?: string | null
   changedByUserId: number
   changedAt: string
   reason: string
@@ -54,7 +56,7 @@ export async function getTicketHistory(ticketId: number, signal: AbortSignal): P
   if (!Array.isArray(data) || !data.every((entry: unknown) => {
     if (typeof entry !== 'object' || entry === null) return false
     const item = entry as Record<string, unknown>
-    return positiveId(item.id) && item.supportTicketId === ticketId
+    return validDisplayNames(item, ['changedByName']) && positiveId(item.id) && item.supportTicketId === ticketId
       && (item.previousStatus === null || typeof item.previousStatus === 'number' && Object.hasOwn(statusLabels, item.previousStatus))
       && typeof item.newStatus === 'number' && Object.hasOwn(statusLabels, item.newStatus)
       && positiveId(item.changedByUserId) && typeof item.reason === 'string'

@@ -1,3 +1,4 @@
+import { displayName } from '../utils/displayNames'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { getTickets, priorityLabels, statusLabels } from '../api/tickets'
@@ -109,7 +110,7 @@ export function TicketsPage() {
                     <td><span className="ticket-id">#{ticket.id}</span><Link className="ticket-title ticket-link" to={`/tickets/${ticket.id}`} aria-label={`View ticket #${ticket.id}: ${ticket.title}`}>{ticket.title}</Link><p className="ticket-description">{ticket.description}</p></td>
                     <td><span className={`status-tag status-${ticket.status}`}>{statusLabels[ticket.status]}</span></td>
                     <td><span className={`priority-tag priority-${ticket.priority}`}>{priorityLabels[ticket.priority]}</span></td>
-                    <td className="nowrap">Store #{ticket.storeId}</td>
+                    <td className="nowrap">{displayName(ticket.storeName, `Store #${ticket.storeId}`)}</td>
                     <td className="nowrap"><time dateTime={utcTimestamp(ticket.createdAt)}>{formatUtcDate(ticket.createdAt)}</time></td>
                   </tr>
                 ))}</tbody>
