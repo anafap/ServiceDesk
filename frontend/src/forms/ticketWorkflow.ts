@@ -8,7 +8,10 @@ export const actionLabels: Record<WorkflowAction, string> = {
 }
 
 export function availableActions(ticket: Pick<Ticket, 'storeId' | 'status'>, user: AuthUser): WorkflowAction[] {
-  if (user.role === 'StoreManager') return user.storeId === ticket.storeId && ticket.status === 5 ? ['close'] : []
+  if (user.role === 'StoreManager') {
+    if (user.storeId !== ticket.storeId) return []
+    return ticket.status === 3 ? ['progress'] : ticket.status === 4 ? ['resolve'] : ticket.status === 5 ? ['close'] : []
+  }
   switch (ticket.status) {
     case 1: return ['approve', 'reject']
     case 2: return ['assign']

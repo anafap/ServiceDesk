@@ -66,10 +66,18 @@ public static class ServiceDeskEndpoints
             return await RunTransition(() => service.AssignTicketAsync(ticketId, request.ExternalTechnicianId, JwtIdentity.UserId(user),
                 request.ScheduledAt.UtcDateTime, request.Notes, JwtIdentity.UserId(user), request.Reason));
         }).RequireAuthorization("Admin");
-        tickets.MapPost("/{ticketId:int}/progress", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
-            RunTransition(() => service.StartProgressTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
-        tickets.MapPost("/{ticketId:int}/resolve", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
-            RunTransition(() => service.ResolveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
+        tickets.MapPost("/{ticketId:int}/progress", async (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
+        {
+            var ticket = await service.GetTicketByIdAsync(ticketId);
+            if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
+            return await RunTransition(() => service.StartProgressTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason));
+        });
+        tickets.MapPost("/{ticketId:int}/resolve", async (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
+        {
+            var ticket = await service.GetTicketByIdAsync(ticketId);
+            if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
+            return await RunTransition(() => service.ResolveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason));
+        });
         tickets.MapPost("/{ticketId:int}/close", async (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
