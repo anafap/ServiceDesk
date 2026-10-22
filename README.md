@@ -107,7 +107,7 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-Latest feature checks: **107 backend tests passed with SQL enabled**, zero skips;
+Latest feature checks: **108 backend tests passed with SQL enabled**, zero skips;
 **59 frontend tests passed**; builds/lint passed. Database-free backend runs skip
 SQL cases explicitly. Tests are verification evidence, not a replacement for
 browser review of newly added screens. A clean local clone successfully restored

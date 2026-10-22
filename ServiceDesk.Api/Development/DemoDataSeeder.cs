@@ -17,8 +17,8 @@ public static class DemoDataSeeder
             Password: Required(configuration, $"DemoData:{key}:Password"))).ToArray();
         if (accounts.Select(item => item.Email.ToLowerInvariant()).Distinct().Count() != accounts.Length)
             throw new InvalidOperationException("Demo accounts must use different email addresses.");
-        if (accounts.Any(item => item.Password.Length < 12))
-            throw new InvalidOperationException("Demo passwords must contain at least 12 characters.");
+        if (accounts.Any(item => item.Password.Length < 8))
+            throw new InvalidOperationException("Demo passwords must contain at least 8 characters.");
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDeskDbContext>();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
