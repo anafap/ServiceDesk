@@ -27,6 +27,21 @@ public class DemoDataTests
         Assert.Equal("Demo passwords must contain at least 8 characters.", error.Message);
     }
 
+    [Fact]
+    public async Task Demo_seed_rejects_passwords_that_cannot_be_used_by_login()
+    {
+        var values = new Dictionary<string, string?>();
+        foreach (var key in new[] { "Admin", "Manager1", "Manager2" })
+        {
+            values[$"DemoData:{key}:Email"] = $"{key.ToLowerInvariant()}@example.test";
+            values[$"DemoData:{key}:Password"] = new string('x', 129);
+        }
+        await using var provider = new ServiceCollection().BuildServiceProvider();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        var error = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => DemoDataSeeder.SeedAsync(provider, configuration));
+        Assert.Contains("128", error.Message);
+    }
+
     [SqlFact]
     public async Task Demo_seed_is_repeatable_preserves_edited_tickets_and_passwords_and_resolves_inactive_names()
     {

@@ -157,6 +157,7 @@ if (app.Environment.IsDevelopment())
 
     if (!browserTests && !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
     {
+        if (password.Length is < 8 or > 128) throw new InvalidOperationException("DemoUser password must contain 8 to 128 characters.");
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDeskDbContext>();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
