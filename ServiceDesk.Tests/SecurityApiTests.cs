@@ -142,6 +142,21 @@ public class SecurityApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Manager_can_progress_and_resolve_own_store_only_with_trusted_actor()
+    {
+        foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); }
+        await SignIn("manager@example.test");
+        foreach (var action in new[] { "progress", "resolve" })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync($"/api/tickets/2/{action}", new { })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync($"/api/tickets/999/{action}", new { })).StatusCode);
+            Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync($"/api/tickets/1/{action}", new { changedByUserId = 999 })).StatusCode);
+        }
+        Assert.All(_api.Data.History, entry => Assert.Equal(21, entry.ChangedByUserId));
+        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/tickets/1/progress", new { })).StatusCode);
+    }
+
+    [Fact]
     public async Task Admin_can_read_ticket_details_from_any_store()
     {
         await SignIn();
@@ -202,8 +217,6 @@ public class SecurityApiTests : IDisposable
     [InlineData("approve")]
     [InlineData("reject")]
     [InlineData("assign")]
-    [InlineData("progress")]
-    [InlineData("resolve")]
     public async Task Manager_cannot_perform_admin_actions(string action)
     {
         await SignIn("manager@example.test");
