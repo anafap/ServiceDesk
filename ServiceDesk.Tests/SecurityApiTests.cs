@@ -321,14 +321,16 @@ public class SecurityApiTests : IDisposable
         await SignIn();
         Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/approve", new { reason = "Valid request" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(1), notes = "Visit" })).StatusCode);
+        await SignIn("manager@example.test");
         Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/progress", new { reason = "Work started" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/resolve", new { reason = "Repaired" })).StatusCode);
-        await SignIn("manager@example.test");
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/close", new { reason = "Confirmed" })).StatusCode);
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/close", new { reason = "Confirmed", changedByUserId = 999 })).StatusCode);
         Assert.Equal(TicketStatus.Closed, _api.Data.Tickets[0].Status);
         Assert.Equal(5, _api.Data.History.Count);
-        Assert.All(_api.Data.History.Take(4), entry => Assert.Equal(11, entry.ChangedByUserId));
-        Assert.Equal(21, _api.Data.History.Last().ChangedByUserId);
+        Assert.All(_api.Data.History.Take(2), entry => Assert.Equal(11, entry.ChangedByUserId));
+        Assert.All(_api.Data.History.Skip(2).Take(2), entry => Assert.Equal(21, entry.ChangedByUserId));
+        Assert.Equal(11, _api.Data.History.Last().ChangedByUserId);
     }
 
     [Fact]
@@ -341,13 +343,28 @@ public class SecurityApiTests : IDisposable
     }
 
     [Fact]
-    public async Task Manager_can_close_only_own_resolved_ticket()
+    public async Task Manager_cannot_close_any_ticket_or_record_history()
     {
         foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); ticket.StartProgress(); ticket.Resolve(); }
         await SignIn("manager@example.test");
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync("/api/tickets/2/close", new { })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync("/api/tickets/1/close", new { changedByUserId = 999 })).StatusCode);
-        Assert.Equal(21, Assert.Single(_api.Data.History).ChangedByUserId);
+        foreach (var id in new[] { 1, 2, 999 })
+            Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync($"/api/tickets/{id}/close", new { changedByUserId = 999 })).StatusCode);
+        Assert.All(_api.Data.Tickets, ticket => Assert.Equal(TicketStatus.Resolved, ticket.Status));
+        Assert.Empty(_api.Data.History);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Admin_can_close_resolved_tickets_from_any_store_with_trusted_actor(int id)
+    {
+        foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); ticket.StartProgress(); ticket.Resolve(); }
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsJsonAsync($"/api/tickets/{id}/close", new { changedByUserId = 999 })).StatusCode);
+        Assert.Equal(TicketStatus.Closed, _api.Data.Tickets.Single(ticket => ticket.Id == id).Status);
+        Assert.Equal(11, Assert.Single(_api.Data.History).ChangedByUserId);
+        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync($"/api/tickets/{id}/close", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync("/api/tickets/999/close", new { })).StatusCode);
     }
 
     [Fact]

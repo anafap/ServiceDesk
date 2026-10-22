@@ -15,9 +15,9 @@ test('admin actions follow the existing lifecycle and terminal states expose no 
   expected.forEach((actions, index) => assert.deepEqual(availableActions({ storeId: 1, status: (index + 1) as TicketStatus }, user), actions))
 })
 
-test('manager can progress, resolve and close only own-store tickets', () => {
+test('manager can progress and resolve own-store tickets but cannot close', () => {
   const manager = { id: 21, name: 'Manager', role: 'StoreManager', storeId: 1 } as const
-  for (const [status, expected] of [[1, []], [2, []], [3, ['progress']], [4, ['resolve']], [5, ['close']], [6, []], [7, []]] as const) {
+  for (const [status, expected] of [[1, []], [2, []], [3, ['progress']], [4, ['resolve']], [5, []], [6, []], [7, []]] as const) {
     assert.deepEqual(availableActions({ storeId: 1, status }, manager), expected)
     assert.deepEqual(availableActions({ storeId: 2, status }, manager), [])
   }

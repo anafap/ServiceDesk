@@ -93,7 +93,7 @@ public static class ServiceDeskEndpoints
             var ticket = await service.GetTicketByIdAsync(ticketId);
             if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
             return await RunTransition(() => service.CloseTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason));
-        });
+        }).RequireAuthorization("Admin");
         tickets.MapGet("/{ticketId:int}/history", async (int ticketId, TicketService service, ClaimsPrincipal user, IDisplayNameRepository display) =>
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
