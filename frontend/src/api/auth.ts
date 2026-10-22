@@ -1,3 +1,4 @@
+import { problemMessage } from './problems.ts'
 import { validDisplayNames } from '../utils/displayNames.ts'
 import type { AuthSession } from '../auth/session'
 
@@ -8,6 +9,7 @@ export async function login(email: string, password: string, signal: AbortSignal
     body: JSON.stringify({ email: email.trim(), password }),
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   })
+  if (response.status === 429) throw new Error(`${await problemMessage(response, 'Too many sign-in attempts.')} Try again in ${response.headers.get('Retry-After') ?? '60'} seconds.`)
   if (response.status === 401) throw new Error('Email or password is incorrect.')
   if (!response.ok) throw new Error('Sign-in is unavailable. Please try again.')
   const data: unknown = await response.json()

@@ -7,7 +7,7 @@ import { signInForTest } from './sessionFixture.ts'
 
 beforeEach(signInForTest)
 afterEach(() => { mock.restoreAll(); setSession(null) })
-const request = { title: 'Updated title', description: 'Updated description', priority: 3 as const }
+const request = { title: 'Updated title', description: 'Updated description', priority: 3 as const, expectedVersion: 'AAAAAAAAAAA=' }
 
 test('edits only mutable fields using PUT and bearer authentication', async () => {
   const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }))

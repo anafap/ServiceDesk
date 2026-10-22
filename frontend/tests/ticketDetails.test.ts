@@ -9,7 +9,7 @@ afterEach(() => { mock.restoreAll(); setSession(null) })
 
 const details = {
   id: 12, title: 'Printer issue', description: 'Full description\nSecond line', status: 2, priority: 3,
-  storeId: 1, categoryId: 2, createdByUserId: 5, assetId: null, createdAt: '2026-10-21T09:00:00',
+  storeId: 1, categoryId: 2, createdByUserId: 5, assetId: null, version: 'AAAAAAAAAAA=', createdAt: '2026-10-21T09:00:00',
 }
 const history = {
   id: 1, supportTicketId: 12, previousStatus: 1, newStatus: 2, changedByUserId: 5,

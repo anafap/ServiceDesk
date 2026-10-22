@@ -1,3 +1,4 @@
+import { validVersion } from './problems.ts'
 import { validDisplayNames } from '../utils/displayNames.ts'
 import { apiFetch } from './http.ts'
 
@@ -14,6 +15,7 @@ export type Ticket = {
   storeName?: string | null
   categoryName?: string | null
   createdByName?: string | null
+  version: string
   createdAt: string
 }
 
@@ -45,7 +47,7 @@ export const priorityLabels: Record<TicketPriority, string> = {
 export function isTicket(value: unknown): value is Ticket {
   if (typeof value !== 'object' || value === null) return false
   const ticket = value as Record<string, unknown>
-  return validDisplayNames(ticket, ['storeName', 'categoryName', 'createdByName']) && typeof ticket.id === 'number' && Number.isInteger(ticket.id) && ticket.id > 0
+  return validVersion(ticket.version) && validDisplayNames(ticket, ['storeName', 'categoryName', 'createdByName']) && typeof ticket.id === 'number' && Number.isInteger(ticket.id) && ticket.id > 0
     && typeof ticket.title === 'string'
     && typeof ticket.description === 'string'
     && typeof ticket.status === 'number' && Object.hasOwn(statusLabels, ticket.status)

@@ -11,7 +11,7 @@ test('administration validates required values and database length limits', () =
   assert.ok(validateAdminInput('external-technicians', { fullName: 'Name', companyName: 'Company', phoneNumber: '1'.repeat(21), specialisation: 'HVAC' }).phoneNumber)
 })
 test('admin API validates data and includes inactive records', async () => {
-  const records = [{ id: 1, storeCode: 'S1', name: 'Store', address: 'Address', city: 'City', isActive: false }]
+  const records = [{ id: 1, storeCode: 'S1', name: 'Store', address: 'Address', city: 'City', isActive: false, version: 'AAAAAAAAAAA=' }]
   mock.method(globalThis, 'fetch', async () => Response.json(records))
   assert.deepEqual(await listAdminRecords('stores', new AbortController().signal), records)
   mock.restoreAll()
@@ -28,7 +28,7 @@ test('administration uses authenticated create edit and activation endpoints', a
   const signal = new AbortController().signal
   await saveAdminRecord('stores', null, { name: 'New' }, signal)
   await saveAdminRecord('external-technicians', 2, { fullName: 'Edited' }, signal)
-  await saveAdminRecord('stores', 1, { isActive: false }, signal, true)
+  await saveAdminRecord('stores', 1, { isActive: false, version: 'AAAAAAAAAAA=' }, signal, true)
   assert.deepEqual(calls.map(call => [call.path, call.method]), [['/api/admin/stores', 'POST'], ['/api/admin/external-technicians/2', 'PUT'], ['/api/admin/stores/1/status', 'PATCH']])
 })
 test('conflicts and uncertain writes are reported without retries', async () => {

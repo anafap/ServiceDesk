@@ -6,7 +6,7 @@ import { filterTickets, recentTickets, summarizeTickets } from '../src/utils/tic
 const tickets: Ticket[] = Array.from({ length: 7 }, (_, index) => ({
   id: index + 1, title: index % 2 === 0 ? 'Repair printer' : 'Network issue',
   description: 'Not searched', status: (index + 1) as TicketStatus,
-  priority: index % 2 === 0 ? 3 : 1, storeId: 1, createdAt: '2026-10-21T10:00:00',
+  priority: index % 2 === 0 ? 3 : 1, storeId: 1, version: 'AAAAAAAAAAA=', createdAt: '2026-10-21T10:00:00',
 }))
 const all = { title: '', status: 'all', priority: 'all' } as const
 
@@ -50,9 +50,9 @@ test('recent tickets return the newest five with deterministic ties without muta
 })
 test('recent tickets compare UTC SQL timestamps and explicit timezone offsets', () => {
   const dates = [
-    { ...tickets[0], createdAt: '2026-10-21T10:00:00' },
-    { ...tickets[1], createdAt: '2026-10-21T12:30:00+03:00' },
-    { ...tickets[2], createdAt: '2026-10-21T10:01:00Z' },
+    { ...tickets[0], version: 'AAAAAAAAAAA=', createdAt: '2026-10-21T10:00:00' },
+    { ...tickets[1], version: 'AAAAAAAAAAA=', createdAt: '2026-10-21T12:30:00+03:00' },
+    { ...tickets[2], version: 'AAAAAAAAAAA=', createdAt: '2026-10-21T10:01:00Z' },
   ]
   assert.deepEqual(recentTickets(dates).map((ticket) => ticket.id), [3, 1, 2])
 })

@@ -64,8 +64,8 @@ export function TicketWorkflow({ ticket, onUpdated, onBusyChange }: {
     pending.current = controller; setSaving(true); onBusyChange(true)
     try {
       const request = isAssignment
-        ? { reason: reason.trim() || null, externalTechnicianId: Number(technicianId), scheduledAt: new Date(scheduledAt).toISOString(), notes: notes.trim() }
-        : { reason: reason.trim() || null }
+        ? { reason: reason.trim() || null, externalTechnicianId: Number(technicianId), scheduledAt: new Date(scheduledAt).toISOString(), notes: notes.trim(), expectedVersion: ticket.version }
+        : { reason: reason.trim() || null, expectedVersion: ticket.version }
       await performTicketAction(ticket.id, action, request, controller.signal)
       if (!controller.signal.aborted) onUpdated(successMessages[action])
     } catch (error: unknown) {

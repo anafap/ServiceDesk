@@ -38,7 +38,7 @@ export function EditTicketForm({ ticket, onSaved, onCancel }: {
     pending.current = controller
     setSaving(true)
     try {
-      await editTicket(ticket.id, { title: values.title.trim(), description: values.description.trim(), priority: Number(values.priority) as TicketPriority }, controller.signal)
+      await editTicket(ticket.id, { title: values.title.trim(), description: values.description.trim(), priority: Number(values.priority) as TicketPriority, expectedVersion: ticket.version }, controller.signal)
       if (!controller.signal.aborted) onSaved()
     } catch (error: unknown) {
       if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : 'Changes could not be saved.')

@@ -8,6 +8,7 @@ import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { EditTicketForm } from '../components/EditTicketForm'
 import { TicketWorkflow } from '../components/TicketWorkflow'
+import { TicketCorrection } from '../components/TicketCorrection'
 import { TicketAssignment } from '../components/TicketAssignment'
 import { formatUtcDateTime, utcTimestamp } from '../utils/dates'
 
@@ -62,6 +63,7 @@ function TicketHistory({ ticketId }: { ticketId: number }) {
       {state.status === 'success' && (state.entries.length === 0
         ? <EmptyState icon="tickets" title="No status changes yet" description="No status changes have been recorded for this ticket." />
         : <ol className="history-list">{state.entries.map((entry) => <li key={entry.id}>
+            {entry.reversesHistoryId && <p className="workflow-note">Status correction · reverses event #{entry.reversesHistoryId}{entry.previousStatus === 3 && entry.newStatus === 2 ? ' · Assignment withdrawn; original record retained.' : entry.previousStatus === 2 && entry.newStatus === 3 ? ' · Recorded assignment restored.' : ''}</p>}
             <p className="history-transition">{entry.previousStatus === null ? 'Initial status' : statusLabels[entry.previousStatus]} → <strong>{statusLabels[entry.newStatus]}</strong></p>
             <p className="history-meta"><time dateTime={utcTimestamp(entry.changedAt)}>{formatUtcDateTime(entry.changedAt)} UTC</time><span>Recorded by {displayName(entry.changedByName, `User #${entry.changedByUserId}`)}</span></p>
             <p className="history-reason">{entry.reason.trim() ? entry.reason : 'No reason recorded.'}</p>
@@ -108,7 +110,7 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
       {notice && <p className="form-message success-message" role="status">{notice}</p>}
       {editing ? <EditTicketForm ticket={ticket} onCancel={() => setEditing(false)} onSaved={() => {
         refreshDetails('Ticket changes saved.')
-      }} /> : <div className="page-actions workflow-buttons"><button className="button button-secondary" type="button" disabled={workflowBusy} onClick={() => refreshDetails()}>Refresh details</button><button className="button button-secondary" type="button" disabled={workflowBusy} onClick={() => { setNotice(''); setEditing(true) }}>Edit ticket</button></div>}
+      }} /> : <div className="page-actions workflow-buttons"><button className="button button-secondary" type="button" disabled={workflowBusy} onClick={() => refreshDetails()}>Refresh details</button><button className="button button-secondary" type="button" disabled={workflowBusy || ticket.status === 6 || ticket.status === 7} onClick={() => { setNotice(''); setEditing(true) }}>Edit ticket</button></div>}
       <section className="panel ticket-details" aria-labelledby="details-title">
         <div className="panel-heading"><h2 id="details-title">Ticket details</h2></div>
         <div className="detail-body">
@@ -127,6 +129,7 @@ function TicketDetailsContent({ ticketId }: { ticketId: number }) {
       </section>
       {!editing && <TicketWorkflow key={`workflow-${requestVersion}`} ticket={ticket} onUpdated={refreshDetails} onBusyChange={setWorkflowBusy} />}
       {ticket.status >= 3 && ticket.status <= 6 && <TicketAssignment key={`assignment-${requestVersion}`} ticketId={ticket.id} />}
+      {!editing && <TicketCorrection key={`correction-${requestVersion}`} ticket={ticket} onUpdated={refreshDetails} busy={workflowBusy} onBusyChange={setWorkflowBusy} />}
       <TicketHistory key={`history-${requestVersion}`} ticketId={ticket.id} />
     </>
   )
