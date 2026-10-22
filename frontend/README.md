@@ -33,7 +33,8 @@ routing and a separately configured API route.
 - Admins alone approve/reject/assign/close; both roles can progress/resolve, with
   manager access limited to the assigned store by the API.
 - Admin-only Stores and Technicians pages provide list/create/edit/deactivate/
-  reactivate. No physical deletion, technician accounts or account-management UI.
+  reactivate. StoreManagers additionally supports account creation, editing,
+  reassignment and password resets. No physical deletion or technician accounts.
 - Names appear for store, category, creator, technician and audit actors, with
   explicit ID fallbacks. Inactive references remain readable; names are current,
   not historical snapshots. Manager views do not load unrestricted directories.
@@ -53,15 +54,25 @@ Filtering and summaries currently derive from the full authorized API response.
 
 The bearer token stays only in tab memory. Reload, sign-out, expiry or 401 clears
 the session; 403 preserves it. API permissions remain authoritative. Logout does
-not revoke copied tokens; refresh/revocation and password-reset UI are deferred.
+not revoke copied tokens by itself. Account changes invalidate previous sessions.
+Admin password reset is implemented; public recovery and refresh tokens are deferred.
 No database credentials or JWT signing keys belong in frontend configuration.
 
 `npm test` uses Node's built-in TypeScript support (22.18+ or compatible newer
-release), with no extra test dependencies. Latest checks: 59 passing tests,
+release), for unit tests. Playwright is a separate development dependency for browser tests.
+Latest checks: 64 passing unit tests and two Chromium walkthroughs,
 production build and lint. Tests cover API contracts, authentication, form and
 workflow validation, filtering/summaries, UTC ordering, administration requests,
-and safe display names. New browser interactions are still pending review.
+safe display names, versions, manager contracts and rate-limit guidance. Browser
+checks cover real form interactions, both roles, stale-write messages, manager
+session invalidation, Admin-only closure/correction, and mobile layout.
 
-Use [the demo guide](../docs/DEMO.md) for role walkthroughs and actual screenshot
-capture. Computer-use permissions were unavailable during this increment, so
-no screenshots or browser interaction success are claimed.
+Existing-record writes include `expectedVersion` from the last loaded record.
+409 conflicts preserve input and ask for refresh instead of silently overwriting.
+Closed/rejected tickets disable editing; Admin uses Correct status with a required
+reason to reverse the latest recorded event and preserve its history.
+
+Use [the demo guide](../docs/DEMO.md), [security behavior](../docs/SECURITY.md), and
+[setup](../docs/SETUP.md) for browser-test execution and actual screenshot captures.
+The browser runner uses isolated headless Chromium and a disposable database,
+without requiring desktop computer-use permission.

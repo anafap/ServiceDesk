@@ -45,11 +45,11 @@ or the equivalent environment variables. Supply your own values locally:
 | `Jwt:Issuer` | `Jwt__Issuer` | `ServiceDesk.Local` |
 | `Jwt:Audience` | `Jwt__Audience` | `ServiceDesk.Frontend` |
 | `DemoData:Admin:Email` | `DemoData__Admin__Email` | Your demo Admin email, e.g. `admin@example.test` |
-| `DemoData:Admin:Password` | `DemoData__Admin__Password` | Unique local password, at least 8 characters |
+| `DemoData:Admin:Password` | `DemoData__Admin__Password` | Unique local password, 8–128 characters |
 | `DemoData:Manager1:Email` | `DemoData__Manager1__Email` | `manager1@example.test` |
-| `DemoData:Manager1:Password` | `DemoData__Manager1__Password` | Unique local password, at least 8 characters |
+| `DemoData:Manager1:Password` | `DemoData__Manager1__Password` | Unique local password, 8–128 characters |
 | `DemoData:Manager2:Email` | `DemoData__Manager2__Email` | `manager2@example.test` |
-| `DemoData:Manager2:Password` | `DemoData__Manager2__Password` | Unique local password, at least 8 characters |
+| `DemoData:Manager2:Password` | `DemoData__Manager2__Password` | Unique local password, 8–128 characters |
 
 For example, `dotnet user-secrets --project ServiceDesk.Api set Jwt:Issuer
 ServiceDesk.Local` sets one non-secret value. For passwords, avoid literal values
@@ -70,8 +70,8 @@ requires all three accounts to be configured before database writes begin. It
 creates `DEMO-01` / `DEMO-02`, one manager per store, a demo technician/category,
 and one starting ticket for each manager. Accounts use hashed passwords.
 Re-running it does not reset passwords or overwrite edits. Reserved store-code
-or account-role/store conflicts stop provisioning and roll it back. Account
-creation/reassignment screens are not part of this release.
+or account-role/store conflicts stop provisioning and roll it back. Normal account
+management is available to Admin through the StoreManagers page.
 
 Normal startup does not run migrations or the full demo seed. The earlier
 `DemoUser:Email` / `DemoUser:Password` startup configuration is supported for
@@ -121,3 +121,41 @@ each case; they never migrate or clear the supplied database. See the root READM
 - Database missing: apply migrations before demo provisioning or API startup.
 - Frontend API errors: start the API on 5200; use the Vite dev server for proxy
   integration. Production preview does not proxy the API.
+
+## Upgrade an existing checkout
+
+Back up the local database and verify the hardening migration on a restored copy
+before applying it. Then run the migration command above and restart the API.
+The migration adds SQL rowversions, account/session fields and restrictive
+relationships. Orphans or normalized-email collisions block migration rather
+than being silently removed. Existing passwords and records are preserved;
+existing accounts remain active. Sign in again after upgrading: old tokens lack
+the new session-version claim.
+
+Use Admin → StoreManagers for normal account creation, editing, reassignment,
+activation and password resets. Demo provisioning is for initial setup and never
+resets an existing password. Initial/reset passwords contain 8–128 characters.
+
+## Automated browser walkthrough and screenshots
+
+From the repository root, with `SERVICEDESK_TEST_SQL_CONNECTION` set privately:
+
+```sh
+npm --prefix frontend exec -- playwright install chromium
+python3 scripts/run-browser-tests.py
+```
+
+The runner builds the API, generates temporary test-only credentials, starts an
+API on 5201 and Vite on 5174, and runs headless Chromium. It always replaces the
+supplied database name with `ServiceDesk_BrowserTests_<unique run ID>` before
+migration/seeding. It stops the test services and drops only that run's database,
+including after failures. The original local database is never used for test data.
+Ports 5201/5174 must be free. Service startup logs are in a private OS temporary
+directory; browser traces are disabled to avoid recording credential input.
+
+Two browser tests cover the full two-role workflow, stale writes, Admin-only
+closure/correction, mobile layout, store/technician forms, manager creation,
+reassignment, password reset, deactivation/reactivation and old-token rejection.
+Screenshots in `docs/screenshots` are real renders of disposable demo records.
+Playwright's failed-test artifacts are Git-ignored. An interrupted process may
+leave its test-prefixed database; never delete a non-test database as cleanup.
