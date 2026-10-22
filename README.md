@@ -13,8 +13,8 @@ private configuration, migrations, demo accounts, and startup commands. The API
 and frontend run natively; the database has a repeatable Compose configuration.
 
 Use [the portfolio demonstration](docs/DEMO.md) for the two-role walkthrough,
-screenshot checklist, and interview talking points. Screenshots are pending
-actual capture; no mock screens are presented as evidence.
+screenshot checklist, and interview talking points. The screenshots below are
+actual Chromium renders of disposable demo data.
 [Learning notes](docs/LEARNING.md) explain the changes, concepts, interview
 questions, and an independent exercise.
 
@@ -31,6 +31,10 @@ questions, and an independent exercise.
   views. Missing references use explicit ID fallbacks; names reflect current data.
 - Admin store/technician list, create, edit, deactivate, and reactivate screens.
 - Loading, empty, error/retry, form-validation, and responsive workspace states.
+- Admin StoreManager creation/editing, store reassignment, activation, and password
+  reset with hashed passwords and invalidation of previous sessions.
+- Optimistic concurrency, restrictive foreign keys, safe Problem Details errors,
+  login rate limiting, and Admin-only audited status corrections.
 - Explicit, idempotent Development demo provisioning with hashed passwords.
 
 ## Workflow and permissions
@@ -47,7 +51,8 @@ AwaitingApproval → Approved → Assigned → InProgress → Resolved → Close
 | Approve/reject/assign technician | Yes | No |
 | Start progress / resolve | All stores | Assigned store only |
 | Close resolved tickets | All stores | No |
-| Manage stores and technicians | Yes | No |
+| Manage stores, technicians and manager accounts | Yes | No |
+| Correct the latest recorded status event | Yes, with reason | No |
 
 The API checks store access before manager reads/writes. Missing and inaccessible
 tickets return the same 404. Invalid transitions return 409; clients cannot skip
@@ -81,7 +86,10 @@ frontend/ → HTTP → ServiceDesk.Api → ServiceDesk.Application → ServiceDe
 
 Each workflow action shares one explicit transaction across ticket, assignment,
 and history writes using the scoped DbContext. Failure rolls back all writes and
-clears EF tracking. Create/edit remain single-save operations.
+clears EF tracking. Create/edit remain single-save operations. SQL rowversions
+prevent stale updates from overwriting newer changes. Closed/rejected tickets
+must first be corrected back to an editable state. Corrections append history;
+they do not erase the mistaken event. See [security and consistency](docs/SECURITY.md).
 
 ## API overview
 
@@ -91,9 +99,17 @@ clears EF tracking. Create/edit remain single-save operations.
 - `GET /api/tickets/{id}/history` and `/assignment` (204 if no assignment).
 - `GET /api/stores`, `/categories`, `/external-technicians` for active choices;
   technician directory access is Admin-only.
-- Admin-only `/api/admin/stores` and `/api/admin/external-technicians`: GET lists
+- Admin-only `/api/admin/stores`, `/api/admin/external-technicians`, and
+  `/api/admin/store-managers`: GET lists
   including inactive records, POST create, PUT `/{id}` edit, PATCH `/{id}/status`
-  with `{ "isActive": false }` or `true`.
+  with `isActive` and the current `expectedVersion`.
+- StoreManager POST creation includes an initial password; POST
+  `/{id}/reset-password` accepts a new password and `expectedVersion`.
+- POST `/api/tickets/{id}/correct-status` requires the latest `eventId`, a reason,
+  and `expectedVersion`. Only Admin can use it.
+
+Existing-record mutations require `expectedVersion` from the latest response's
+`version`; stale writes return 409. Creating a record does not require a version.
 
 Swagger in Development provides an Authorize control for bearer tokens. Display
 responses contain names/IDs only where needed; no password hashes or signing keys.
@@ -108,15 +124,20 @@ npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-Latest feature checks: **110 backend tests passed with SQL enabled**, zero skips;
-**59 frontend tests passed**; builds/lint passed. Database-free backend runs skip
-SQL cases explicitly. Tests are verification evidence, not a replacement for
-browser review of newly added screens. A clean local clone successfully restored
-dependencies/tools, started the separate Compose SQL instance, applied migrations,
-seeded demo data twice, and built the frontend. A real three-account HTTP
-walkthrough verified management, inactive-record behavior, named responses, and
-the full Admin/StoreManager workflow. The temporary review SQL instance was then
-removed.
+Latest checks: **122 backend tests with SQL enabled**, **64 frontend unit tests**,
+and **2 Chromium end-to-end tests passed**. Builds/lint passed. The browser tests
+exercise actual UI forms, both store scopes, stale writes, Admin-only closure and
+correction, account/session changes, and mobile layout. SQL checks include
+competing transactions, rollback, restrictive references and seed idempotency.
+
+The hardening migration was verified against a restored populated database copy
+before applying it locally. Record counts and existing active accounts were
+preserved, and a fresh local safety backup was retained. Earlier clean-checkout
+restore/migration/seed verification is documented in [setup](docs/SETUP.md).
+
+Run `python3 scripts/run-browser-tests.py` with the private SQL test connection to
+repeat the isolated browser checks and regenerate the screenshots. See the setup
+guide for Chromium installation and test database cleanup.
 
 Privately set `SERVICEDESK_TEST_SQL_CONNECTION` to enable SQL tests. They override
 the supplied database name with `ServiceDesk_TransactionTests_<guid>`, migrate a
@@ -131,8 +152,20 @@ Secrets belong in user-secrets or environment configuration outside Git. Tokens
 stay only in browser memory: reload, logout, expiry, or 401 requires sign-in.
 Logout does not revoke copied tokens. Use HTTPS for hosted environments.
 
-This release targets a local portfolio demo. Public deployment, user-management
-screens/password reset, multi-store manager assignments, refresh/revoked tokens,
-notifications, historical name snapshots, server-side pagination, and optimistic
-concurrency are deferred. Transactions protect atomicity; they do not prevent
-all conflicts between simultaneous requests.
+This release targets a local portfolio demo. Public deployment, multi-store
+manager assignments, refresh tokens, per-session logout revocation, public
+password recovery, notifications, historical name snapshots and server-side
+pagination remain deferred. Account access/password/store changes invalidate old
+tokens. Application passwords contain 8–128 characters.
+
+## Actual application screenshots
+
+![Admin dashboard](docs/screenshots/admin-dashboard.png)
+![Manager account administration](docs/screenshots/manager-administration.png)
+
+More screenshots: [ticket filters](docs/screenshots/ticket-filters.png),
+[assignment and correction history](docs/screenshots/ticket-history.png),
+[manager workspace](docs/screenshots/manager-workspace.png),
+[mobile layout](docs/screenshots/manager-mobile.png),
+[stores](docs/screenshots/store-administration.png), and
+[technicians](docs/screenshots/technician-administration.png).

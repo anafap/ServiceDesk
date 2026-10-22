@@ -24,7 +24,13 @@ writes use SQL transactions, verified with real rollback tests.
 5. Show named actors, technician, and UTC timestamps in assignment/history.
 6. As Admin, create/edit a demo store and technician. Deactivate/reactivate them.
    Explain that inactive records are excluded from new work but retained in history.
-7. Explain atomic saves: history or assignment failure rolls back the ticket
+7. As Admin, demonstrate StoreManagers: create an account for an active store,
+   edit its assignment, deactivate/reactivate it and reset its password. Show that
+   a previously authenticated manager must sign in again after access changes.
+8. Close a resolved demo ticket, then demonstrate Correct status with a required
+   reason. Show the original closure and correction together in history. Explain
+   that closed/rejected tickets cannot be edited directly.
+9. Explain atomic saves: history or assignment failure rolls back the ticket
    change, and SQL integration tests verify persisted state using fresh contexts.
 
 Use demo-only contacts and data. No notifications are sent. Do not show passwords,
@@ -41,9 +47,10 @@ Capture actual running screens, with demo records and readable names:
 - `screenshots/store-administration.png`: Admin list/form and activation controls.
 - `screenshots/technician-administration.png`: technician management.
 
-Only link files in the README after they have actually been captured and checked.
-Browser verification from the earlier release does not automatically verify the
-new administration and StoreManager screens. Record new checks in progress notes.
+All listed screenshots are now actual headless Chromium captures of isolated
+SQL-backed demo data. Additional captures: `screenshots/manager-administration.png`
+and `screenshots/manager-mobile.png`. The two automated browser walkthroughs
+passed; run the documented test runner to reproduce them.
 
 ## Interview talking points
 
@@ -53,12 +60,12 @@ new administration and StoreManager screens. Record new checks in progress notes
   Infrastructure implements SQL persistence and transactions.
 - DTO display names avoid exposing user/contact directories to managers.
 - Deactivation preserves references and historical records.
-- Transactions prevent partial saves; optimistic concurrency remains separate work.
+- Transactions prevent partial saves; rowversions reject stale competing writes.
 
 ## Remaining limitations
 
 This is a local portfolio application. Public hosting, multi-store manager
-assignments, account-management UI, password reset, refresh/revoked tokens,
-notifications, historical name snapshots, server-side ticket pagination, and
-concurrent-update conflict handling are deferred. Names reflect current records.
+assignments, refresh tokens, per-session logout revocation, public password
+recovery, notifications, historical name snapshots and server-side ticket
+pagination are deferred. Names reflect current records.
 Store managers still have access to existing work when their store is inactive.
