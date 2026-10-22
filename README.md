@@ -79,7 +79,8 @@ Contains HTTP endpoints, authentication configuration, request/response models, 
 ### Tests
 
 Contains unit tests for domain rules and application tests for use cases. Security integration tests exercise the real API and JWT middleware with isolated
-repository fakes. SQL-backed behavior is checked separately against the local demo.
+repository fakes. Opt-in SQL Server integration tests use disposable databases to
+verify real workflow commits, partial-write rollback, and retry after failure.
 
 ## Current domain model
 
@@ -116,7 +117,8 @@ The current implementation has completed the domain foundation, persistence wiri
 - `SupportTicketRepository`, `TechnicianAssignmentRepository`, and `TicketStatusHistoryRepository` are implemented.
 - SQL Server connection configuration is supplied through user-secrets or environment variables.
 - Dependency injection registers the database context, repositories, and `TicketService`.
-- The backend suite passes 88 tests, including authentication and authorization integration tests.
+- The backend suite passes 96 tests when SQL Server integration tests are enabled,
+  including authentication, authorization, and atomic workflow persistence.
 - React provides sign-in/sign-out, a real ticket list, a create-ticket form, and ticket details/history.
 - JWT issuance, role checks, store-level access, and trusted audit identity are implemented.
 
@@ -183,8 +185,12 @@ For a placeholder technician in a local demo database, run
 [SeedDemoTechnician.sql](ServiceDesk.Infrastructure/Sql/SeedDemoTechnician.sql).
 It is idempotent and creates a clearly labeled demo contact; no messages are sent.
 This feature does not add technician contact-management screens or notifications.
-Workflow status and audit/assignment saves still use separate repository writes;
-transactional consistency across those writes remains a pending reliability task.
+Each workflow action wraps ticket, assignment (when applicable), and history
+writes in one SQL transaction. A failure rolls all writes back; EF's change
+tracker is cleared so subsequent reads do not return attempted changes.
+All participating repositories share the request-scoped DbContext. Creation and
+general editing remain single-save operations. Concurrent-request conflict
+detection is separate from this atomicity guarantee.
 
 The React session stays in memory and is cleared on reload/sign-out/expiry/401.
 Logout does not revoke copied tokens; refresh tokens and revocation are not yet
@@ -199,6 +205,27 @@ dotnet build
 dotnet test
 dotnet run --project ServiceDesk.Api
 ```
+
+## SQL Server transaction tests
+
+The default `dotnet test` run needs no database: 88 tests pass and the three SQL
+fact/theory groups are explicitly skipped. To run all 96 cases, provide
+`SERVICEDESK_TEST_SQL_CONNECTION` through your local environment or secret manager
+and run `dotnet test`. Never commit its value.
+
+These tests replace the supplied connection's database name with a unique
+`ServiceDesk_TransactionTests_<guid>` name before opening a connection. They
+apply the existing migrations, seed disposable test data, force SQL constraint
+failures, verify persisted state using fresh DbContexts, and delete each test
+database afterward. Use a local test SQL Server login with permission to create
+and drop databases. The supplied database itself is never migrated or cleared.
+Interrupted test processes may leave a database with this test-only prefix to
+remove manually.
+
+The rollback tests cover approve, reject, assign, start progress, resolve, and
+close when history insertion fails; assignment insertion failure; successful
+retry on the same context; and the complete successful workflow. They require
+SQL Server rather than an in-memory fake to verify actual transaction behavior.
 
 ## Status
 

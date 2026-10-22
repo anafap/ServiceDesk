@@ -6,6 +6,7 @@ namespace ServiceDesk.Application.Services;
 
 public class TicketService
 {
+    private readonly IWorkflowTransaction _workflowTransaction;
     private readonly ISupportTicketRepository _ticketRepository;
     private readonly ITicketStatusHistoryRepository _historyRepository;
 
@@ -13,8 +14,10 @@ public class TicketService
 
     public TicketService(ISupportTicketRepository ticketRepository,
         ITechnicianAssignmentRepository assignmentRepository,
-        ITicketStatusHistoryRepository historyRepository)
+        ITicketStatusHistoryRepository historyRepository,
+        IWorkflowTransaction workflowTransaction)
     {
+        _workflowTransaction = workflowTransaction;
         _ticketRepository = ticketRepository;
         _assignmentRepository = assignmentRepository;
         _historyRepository = historyRepository;
@@ -23,57 +26,64 @@ public class TicketService
 
     public async Task ApproveTicketAsync(int ticketId, int changedByUserId, string? reason)
     {
-        var ticket = await
-        _ticketRepository.GetByIdAsync(ticketId);
+        await _workflowTransaction.ExecuteAsync(async () =>
+        {
+            var ticket = await
+            _ticketRepository.GetByIdAsync(ticketId);
 
-        if (ticket is null)
-            throw new KeyNotFoundException(
-                $"Ticket with ID {ticketId} was not found.");
+            if (ticket is null)
+                throw new KeyNotFoundException(
+                    $"Ticket with ID {ticketId} was not found.");
 
-        var previousStatus = ticket.Status;
+            var previousStatus = ticket.Status;
 
-        ticket.Approve();
-        var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
+            ticket.Approve();
+            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
 
-        await _ticketRepository.SaveAsync(ticket);
-        await _historyRepository.AddAsync(history);
-
+            await _ticketRepository.SaveAsync(ticket);
+            await _historyRepository.AddAsync(history);
+        });
     }
 
     public async Task RejectTicketAsync(int ticketId, int changedByUserId, string? reason)
     {
-        var ticket = await
-        _ticketRepository.GetByIdAsync(ticketId);
+        await _workflowTransaction.ExecuteAsync(async () =>
+        {
+            var ticket = await
+            _ticketRepository.GetByIdAsync(ticketId);
 
-        if (ticket is null)
-            throw new KeyNotFoundException(
-                $"Ticket with ID {ticketId} was not found.");
+            if (ticket is null)
+                throw new KeyNotFoundException(
+                    $"Ticket with ID {ticketId} was not found.");
 
-        var previousStatus = ticket.Status;
-        ticket.Reject();
-        var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
+            var previousStatus = ticket.Status;
+            ticket.Reject();
+            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
 
 
-        await _ticketRepository.SaveAsync(ticket);
-        await _historyRepository.AddAsync(history);
-
+            await _ticketRepository.SaveAsync(ticket);
+            await _historyRepository.AddAsync(history);
+        });
     }
     public async Task AssignTicketAsync(int ticketId, int externaltechnicianId, int assignedByUserId, DateTime scheduledAt, string notes, int changedByUserId, string? reason)
     {
-        var ticket = await
-        _ticketRepository.GetByIdAsync(ticketId);
+        await _workflowTransaction.ExecuteAsync(async () =>
+        {
+            var ticket = await
+            _ticketRepository.GetByIdAsync(ticketId);
 
-        if (ticket is null)
-            throw new KeyNotFoundException(
-                $"Ticket with ID {ticketId} was not found.");
-        var assignment = new TechnicianAssignment(ticketId, externaltechnicianId, assignedByUserId, scheduledAt, notes);
-        var previousStatus = ticket.Status;
-        ticket.Assign();
-        var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
+            if (ticket is null)
+                throw new KeyNotFoundException(
+                    $"Ticket with ID {ticketId} was not found.");
+            var assignment = new TechnicianAssignment(ticketId, externaltechnicianId, assignedByUserId, scheduledAt, notes);
+            var previousStatus = ticket.Status;
+            ticket.Assign();
+            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
 
-        await _ticketRepository.SaveAsync(ticket);
-        await _assignmentRepository.AddAsync(assignment);
-        await _historyRepository.AddAsync(history);
+            await _ticketRepository.SaveAsync(ticket);
+            await _assignmentRepository.AddAsync(assignment);
+            await _historyRepository.AddAsync(history);
+        });
     }
     public async Task<SupportTicket> CreateTicketAsync(string title, string description, int createdByUserId, int categoryId, int storeId,
         TicketPriority priority)
@@ -86,50 +96,58 @@ public class TicketService
 
     public async Task StartProgressTicketAsync(int ticketId, int changedByUserId, string? reason)
     {
-        var ticket = await
-        _ticketRepository.GetByIdAsync(ticketId);
+        await _workflowTransaction.ExecuteAsync(async () =>
+        {
+            var ticket = await
+            _ticketRepository.GetByIdAsync(ticketId);
 
-        if (ticket is null)
-            throw new KeyNotFoundException(
-                $"Ticket with ID {ticketId} was not found.");
+            if (ticket is null)
+                throw new KeyNotFoundException(
+                    $"Ticket with ID {ticketId} was not found.");
 
-        var previousStatus = ticket.Status;
-        ticket.StartProgress();
-        var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
+            var previousStatus = ticket.Status;
+            ticket.StartProgress();
+            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
 
-        await _ticketRepository.SaveAsync(ticket);
-        await _historyRepository.AddAsync(history);
+            await _ticketRepository.SaveAsync(ticket);
+            await _historyRepository.AddAsync(history);
+        });
     }
     public async Task ResolveTicketAsync(int ticketId, int changedByUserId, string? reason)
     {
-        var ticket = await
-        _ticketRepository.GetByIdAsync(ticketId);
+        await _workflowTransaction.ExecuteAsync(async () =>
+        {
+            var ticket = await
+            _ticketRepository.GetByIdAsync(ticketId);
 
-        if (ticket is null)
-            throw new KeyNotFoundException(
-                $"Ticket with ID {ticketId} was not found.");
+            if (ticket is null)
+                throw new KeyNotFoundException(
+                    $"Ticket with ID {ticketId} was not found.");
 
-        var previousStatus = ticket.Status;
-        ticket.Resolve();
-        var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-        await _ticketRepository.SaveAsync(ticket);
-        await _historyRepository.AddAsync(history);
+            var previousStatus = ticket.Status;
+            ticket.Resolve();
+            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
+            await _ticketRepository.SaveAsync(ticket);
+            await _historyRepository.AddAsync(history);
+        });
     }
     public async Task CloseTicketAsync(int ticketId, int changedByUserId, string? reason)
     {
-        var ticket = await
-        _ticketRepository.GetByIdAsync(ticketId);
+        await _workflowTransaction.ExecuteAsync(async () =>
+        {
+            var ticket = await
+            _ticketRepository.GetByIdAsync(ticketId);
 
-        if (ticket is null)
-            throw new KeyNotFoundException(
-                $"Ticket with ID {ticketId} was not found.");
+            if (ticket is null)
+                throw new KeyNotFoundException(
+                    $"Ticket with ID {ticketId} was not found.");
 
-        var previousStatus = ticket.Status;
-        ticket.Close();
-        var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
-        await _ticketRepository.SaveAsync(ticket);
-        await _historyRepository.AddAsync(history);
-
+            var previousStatus = ticket.Status;
+            ticket.Close();
+            var history = new TicketStatusHistory(ticketId, previousStatus, ticket.Status, changedByUserId, reason);
+            await _ticketRepository.SaveAsync(ticket);
+            await _historyRepository.AddAsync(history);
+        });
     }
 
     public async Task UpdateTicketDetailsAsync(int ticketId, string title, string description, TicketPriority priority)

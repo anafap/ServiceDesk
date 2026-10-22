@@ -351,6 +351,8 @@ public class SecurityApiTests : IDisposable
                 services.RemoveAll<ITicketStatusHistoryRepository>();
                 services.RemoveAll<ITechnicianAssignmentRepository>();
                 services.AddSingleton<IUserRepository>(Data);
+                services.RemoveAll<IWorkflowTransaction>();
+                services.AddSingleton<IWorkflowTransaction, FakeWorkflowTransaction>();
                 services.AddSingleton<ISupportTicketRepository>(Data);
                 services.AddSingleton<IReferenceDataRepository>(Data);
                 services.AddSingleton<ITicketStatusHistoryRepository>(Data);

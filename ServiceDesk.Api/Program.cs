@@ -3,6 +3,7 @@ using ServiceDesk.Application.Interfaces;
 using ServiceDesk.Application.Services;
 using ServiceDesk.Infrastructure;
 using ServiceDesk.Infrastructure.Repositories;
+using ServiceDesk.Infrastructure.Transactions;
 using ServiceDesk.Domain.Enums;
 using ServiceDesk.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -35,6 +36,7 @@ builder.Services.AddScoped<ITechnicianAssignmentRepository, TechnicianAssignment
 builder.Services.AddScoped<ITicketStatusHistoryRepository, TicketStatusHistoryRepository>();
 builder.Services.AddScoped<IReferenceDataRepository, ReferenceRepository>();
 
+builder.Services.AddScoped<IWorkflowTransaction, WorkflowTransaction>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<ReferenceService>();
 
