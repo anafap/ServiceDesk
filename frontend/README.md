@@ -131,3 +131,20 @@ interaction checks.
 The ASP.NET Core solution stays at the repository root. Browser code must never
 contain database credentials,
 JWT signing keys, or other server secrets.
+
+## Two-role portfolio increment
+
+StoreManagers can start progress, resolve, and close tickets only in their own
+store. Admins approve/reject/assign and retain all workflow actions. The workspace
+identifies the role and assigned store; manager dashboard data is server-scoped.
+One shared login is used for all accounts.
+
+Admin-only Stores and Technicians navigation provides list/create/edit and
+activation controls. Deactivation preserves references and existing work.
+Ticket views show safe names supplied with authorized responses, including
+inactive historical references, with explicit ID fallbacks for unresolved names.
+No global user/contact directory is fetched for a manager.
+
+See [setup](../docs/SETUP.md) and [demo walkthrough](../docs/DEMO.md). Newly added
+screens still require browser review; the previous browser check predates this
+increment. Latest frontend checks: 59 tests, production build, and lint passed.
