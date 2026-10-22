@@ -6,6 +6,10 @@ public class TechnicianAssignment
     // EF restores historical visits without rerunning rules for a new appointment.
     private TechnicianAssignment() { }
 
+    public DateTime? WithdrawnAt { get; private set; }
+    public void Withdraw() => WithdrawnAt = DateTime.UtcNow;
+    public void Restore() => WithdrawnAt = null;
+
     public int Id { get; private set; }
 
     public int SupportTicketId { get; private set; }

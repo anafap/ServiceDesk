@@ -23,7 +23,7 @@ public class DemoDataTests
         values["DemoData:Manager1:Password"] = Guid.NewGuid().ToString("N")[..7];
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         await using var provider = new ServiceCollection().BuildServiceProvider();
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => DemoDataSeeder.SeedAsync(provider, configuration));
+        var error = await Assert.ThrowsAnyAsync<InvalidOperationException>(() => DemoDataSeeder.SeedAsync(provider, configuration));
         Assert.Equal("Demo passwords must contain at least 8 characters.", error.Message);
     }
 
@@ -62,7 +62,7 @@ public class DemoDataTests
         await DemoDataSeeder.SeedAsync(provider, configuration);
         context.ChangeTracker.Clear();
         Assert.Equal(2, await context.SupportTickets.CountAsync());
-        Assert.Equal(3, await context.Users.CountAsync());
+        Assert.Equal(4, await context.Users.CountAsync());
         foreach (var manager in await context.Users.Where(item => item.Role == UserRole.StoreManager).ToListAsync()) Assert.Equal(hashes[manager.Id], manager.PasswordHash);
         var names = await new DisplayNameRepository(context).GetAsync(managers.Select(item => item.StoreId!.Value).ToArray(), [], managers.Select(item => item.Id).ToArray(), [int.MaxValue]);
         Assert.Equal(2, names.Stores.Count);

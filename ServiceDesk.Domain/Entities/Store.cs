@@ -1,5 +1,5 @@
 namespace ServiceDesk.Domain.Entities;
-public class Store
+public class Store : VersionedEntity
 {
     public int Id { get; private set; }
     public string StoreCode { get; private set; } = string.Empty;

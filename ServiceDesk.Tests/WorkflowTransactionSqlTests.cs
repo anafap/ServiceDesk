@@ -132,6 +132,7 @@ public sealed class WorkflowTransactionSqlTests
                 var store = new Store("TEST", "Test store", "Test address", "Test city");
                 var category = new TicketCategory();
                 context.Entry(category).Property(item => item.Name).CurrentValue = "Test category";
+                context.Add(new User("Test", "Admin", "sql.admin@example.test", "000", UserRole.Admin, null));
                 context.AddRange(store, category, new ExternalTechnician("Test technician", "Test company", "000", "General"));
                 await context.SaveChangesAsync();
                 database.StoreId = store.Id;

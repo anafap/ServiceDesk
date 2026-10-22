@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
+using ServiceDesk.Api.Errors;
 using Microsoft.EntityFrameworkCore;
 using ServiceDesk.Application.Interfaces;
 using ServiceDesk.Application.Services;
@@ -16,7 +19,30 @@ using Microsoft.OpenApi;
 
 
 var builder = WebApplication.CreateBuilder(args);
+var browserTests = ServiceDesk.Api.Development.BrowserTestDatabase.Configure(builder, args);
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+    context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = Math.Clamp(builder.Configuration.GetValue("LoginRateLimit:PermitLimit", 20), 1, 10000),
+            Window = TimeSpan.FromSeconds(Math.Clamp(builder.Configuration.GetValue("LoginRateLimit:WindowSeconds", 60), 1, 3600)),
+            QueueLimit = 0, AutoReplenishment = true,
+        }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var seconds = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retry) ? Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds)) : 60;
+        context.HttpContext.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        await Results.Problem(statusCode: 429, title: "Too many sign-in attempts", detail: "Please wait before signing in again.",
+            extensions: new Dictionary<string, object?> { ["traceId"] = context.HttpContext.TraceIdentifier }).ExecuteAsync(context.HttpContext);
+    };
+});
 builder.Services.AddSwaggerGen(options =>
 {
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -39,6 +65,8 @@ builder.Services.AddScoped<IReferenceDataRepository, ReferenceRepository>();
 builder.Services.AddScoped<IWorkflowTransaction, WorkflowTransaction>();
 builder.Services.AddScoped<IAdministrationRepository, AdministrationRepository>();
 builder.Services.AddScoped<AdministrationService>();
+builder.Services.AddScoped<IManagerRepository, ManagerRepository>();
+builder.Services.AddScoped<ManagerService>();
 builder.Services.AddScoped<IDisplayNameRepository, DisplayNameRepository>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<ReferenceService>();
@@ -77,11 +105,17 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         };
         options.Events = new JwtBearerEvents
         {
-            OnTokenValidated = context =>
+            OnTokenValidated = async context =>
             {
-                if (context.Principal is null || !JwtIdentity.HasValidClaims(context.Principal))
-                    context.Fail("Required user claims are missing or invalid.");
-                return Task.CompletedTask;
+                var identity = context.Principal;
+                if (identity is null || !JwtIdentity.HasValidClaims(identity)) { context.Fail("Invalid identity."); return; }
+                var users = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+                var account = await users.GetByIdAsync(JwtIdentity.UserId(identity));
+                if (account is null || !account.IsActive
+                    || identity.FindFirst("session_version")?.Value != account.SessionVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    || !identity.IsInRole(account.Role.ToString())
+                    || (account.Role == UserRole.StoreManager && JwtIdentity.StoreId(identity) != account.StoreId))
+                    context.Fail("This session is no longer valid. Sign in again.");
             }
         };
     });
@@ -94,6 +128,17 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+if (args.Contains("--cleanup-browser-tests"))
+{
+    await ServiceDesk.Api.Development.BrowserTestDatabase.DeleteAsync(app.Services);
+    return;
+}
+if (browserTests)
+{
+    await ServiceDesk.Api.Development.BrowserTestDatabase.PrepareAsync(app.Services);
+    await ServiceDesk.Api.Development.DemoDataSeeder.SeedAsync(app.Services, app.Configuration);
+}
+
 
 if (args.Contains("--seed-demo"))
 {
@@ -110,7 +155,7 @@ if (app.Environment.IsDevelopment())
     var email = app.Configuration["DemoUser:Email"];
     var password = app.Configuration["DemoUser:Password"];
 
-    if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+    if (!browserTests && !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
     {
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ServiceDeskDbContext>();
@@ -131,6 +176,14 @@ if (app.Environment.IsDevelopment())
     }
 }
 
+app.UseExceptionHandler();
+app.UseStatusCodePages(async context =>
+{
+    var response = context.HttpContext.Response;
+    await Results.Problem(statusCode: response.StatusCode, title: "Request rejected",
+        extensions: new Dictionary<string, object?> { ["traceId"] = context.HttpContext.TraceIdentifier }).ExecuteAsync(context.HttpContext);
+});
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -143,10 +196,11 @@ app.MapPost("/api/auth/login", async (LoginRequest request, LoginService login, 
     var names = await display.GetAsync(user.StoreId.HasValue ? [user.StoreId.Value] : [], [], [], []);
     var session = tokens.Issue(user);
     return Results.Ok(session with { User = session.User with { StoreName = user.StoreId.HasValue ? names.Stores.GetValueOrDefault(user.StoreId.Value) : null } });
-}).AllowAnonymous();
+}).AllowAnonymous().RequireRateLimiting("login");
 
 app.MapServiceDeskEndpoints();
 app.MapAdministrationEndpoints();
+app.MapManagerEndpoints();
 app.Run();
 
 public record LoginRequest(string Email, string Password);

@@ -1,3 +1,4 @@
+using ServiceDesk.Domain.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
 using ServiceDesk.Application.Interfaces;
@@ -17,6 +18,6 @@ public sealed class AdministrationRepository(ServiceDeskDbContext db) : IAdminis
     {
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
-        { throw new InvalidOperationException("This store code is already in use.", exception); }
+        { throw new StateConflictException("This store code is already in use."); }
     }
 }

@@ -1,10 +1,14 @@
+using ServiceDesk.Domain.Exceptions;
 namespace ServiceDesk.Domain.Entities;
 
 using ServiceDesk.Domain.Enums;
 
 
-public class User
+public class User : VersionedEntity
 {
+    public bool IsActive { get; private set; } = true;
+    public int SessionVersion { get; private set; } = 1;
+    public string NormalizedEmail { get; private set; } = string.Empty;
     public int Id { get; private set; }
 
     public string FirstName { get; private set; } = string.Empty;
@@ -42,7 +46,8 @@ public class User
 
         FirstName = firstName;
         LastName = lastName;
-        Email = email;
+        Email = email.Trim().ToLowerInvariant();
+        NormalizedEmail = Email.ToUpperInvariant();
         PhoneNumber = phoneNumber;
         Role = role;
         StoreId = storeId;
@@ -53,6 +58,28 @@ public class User
     {
         if (string.IsNullOrWhiteSpace(passwordHash))
             throw new ArgumentException("password is required.", nameof(passwordHash));
+        if (PasswordHash is not null) SessionVersion++;
         PasswordHash = passwordHash;
+    }
+    public void UpdateManager(string firstName, string lastName, string email, string phoneNumber, int storeId)
+    {
+        if (Role != UserRole.StoreManager) throw new StateConflictException("Only StoreManager accounts can be managed here.");
+        if (string.IsNullOrWhiteSpace(firstName) || firstName.Trim().Length > 100
+            || string.IsNullOrWhiteSpace(lastName) || lastName.Trim().Length > 100
+            || string.IsNullOrWhiteSpace(phoneNumber) || phoneNumber.Trim().Length > 50
+            || string.IsNullOrWhiteSpace(email) || email.Trim().Length > 320
+            || !System.Net.Mail.MailAddress.TryCreate(email.Trim(), out var parsed) || parsed.Address != email.Trim()
+            || storeId <= 0) throw new ArgumentException("Valid name, email, phone number, and store are required.");
+        var normalized = email.Trim().ToLowerInvariant();
+        if (Email != normalized || StoreId != storeId) SessionVersion++;
+        FirstName = firstName.Trim(); LastName = lastName.Trim(); PhoneNumber = phoneNumber.Trim();
+        Email = normalized; NormalizedEmail = normalized.ToUpperInvariant(); StoreId = storeId;
+    }
+
+    public void SetActive(bool active)
+    {
+        if (IsActive == active) return;
+        IsActive = active;
+        SessionVersion++;
     }
 }

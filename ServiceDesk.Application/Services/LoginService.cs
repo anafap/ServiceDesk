@@ -15,11 +15,11 @@ public class LoginService
     }
     public async Task<User?> AuthenticateAsync(string email, string password)
     {
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password) || password.Length > 128)
             return null;
         var user = await _users.GetByEmailAsync(email.Trim());
 
-        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash))
+        if (user is null || !user.IsActive || string.IsNullOrWhiteSpace(user.PasswordHash))
             return null;
 
         var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);

@@ -1,7 +1,8 @@
+using ServiceDesk.Domain.Exceptions;
 using ServiceDesk.Domain.Enums;
 namespace ServiceDesk.Domain.Entities;
 
-public class SupportTicket
+public class SupportTicket : VersionedEntity
 {
     public int Id { get; private set; }
     public string Title { get; private set; } = string.Empty;
@@ -49,6 +50,8 @@ public class SupportTicket
 
     public void UpdateDetails(string title, string description, TicketPriority priority)
     {
+        if (Status is TicketStatus.Closed or TicketStatus.Rejected)
+            throw new StateConflictException("Correct the ticket status before editing a closed or rejected request.");
         if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 200)
             throw new ArgumentException("Title is required and must be 200 characters or fewer.", nameof(title));
         if (string.IsNullOrWhiteSpace(description) || description.Trim().Length > 4000)
@@ -63,7 +66,7 @@ public class SupportTicket
     {
         if (Status != TicketStatus.AwaitingApproval)
         {
-            throw new InvalidOperationException(
+            throw new StateConflictException(
                 "Only awaiting-approval tickets can be approved.");
         }
 
@@ -74,7 +77,7 @@ public class SupportTicket
     {
         if (Status != TicketStatus.AwaitingApproval)
         {
-            throw new InvalidOperationException(
+            throw new StateConflictException(
                 "Only AwaitingApproval tickets can be rejected.");
         }
 
@@ -86,7 +89,7 @@ public class SupportTicket
     {
         if (Status != TicketStatus.Approved)
         {
-            throw new InvalidOperationException(
+            throw new StateConflictException(
                 "Only Approved tickets can be assigned.");
         }
 
@@ -96,7 +99,7 @@ public class SupportTicket
     {
         if (Status != TicketStatus.Assigned)
         {
-            throw new InvalidOperationException(
+            throw new StateConflictException(
                 "Only assigned tickets can be moved to in progress.");
         }
 
@@ -106,7 +109,7 @@ public class SupportTicket
     {
         if (Status != TicketStatus.InProgress)
         {
-            throw new InvalidOperationException(
+            throw new StateConflictException(
                 "Only in-progress tickets can be resolved.");
         }
 
@@ -116,10 +119,18 @@ public class SupportTicket
     {
         if (Status != TicketStatus.Resolved)
         {
-            throw new InvalidOperationException(
+            throw new StateConflictException(
                 "Only Resolved tickets can be closed.");
         }
 
         Status = TicketStatus.Closed;
+    }
+    public void CorrectStatus(TicketStatus target)
+    {
+        var edge = ((int)Status, (int)target);
+        if (edge is not ((1, 2) or (2, 1) or (1, 7) or (7, 1) or (2, 3) or (3, 2)
+            or (3, 4) or (4, 3) or (4, 5) or (5, 4) or (5, 6) or (6, 5)))
+            throw new StateConflictException("The recorded event cannot be reversed from the current status.");
+        Status = target;
     }
 }

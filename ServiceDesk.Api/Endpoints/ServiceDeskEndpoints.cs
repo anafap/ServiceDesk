@@ -11,7 +11,7 @@ public static class ServiceDeskEndpoints
 {
     public static void MapServiceDeskEndpoints(this WebApplication app)
     {
-        var api = app.MapGroup("/api").RequireAuthorization();
+        var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter<VersionFilter>();
         var tickets = api.MapGroup("/tickets");
 
         tickets.MapGet("", async (TicketService service, ClaimsPrincipal user, IDisplayNameRepository display) =>
@@ -33,7 +33,7 @@ public static class ServiceDeskEndpoints
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
             if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
-            return await RunTransition(() => service.UpdateTicketDetailsAsync(ticketId, request.Title, request.Description, request.Priority));
+            return await RunTransition(() => service.UpdateTicketDetailsAsync(ticketId, request.Title, request.Description, request.Priority, request.ExpectedVersion));
         });
 
         tickets.MapGet("/{ticketId:int}/assignment", async (int ticketId, TicketService service, ClaimsPrincipal user, IDisplayNameRepository display) =>
@@ -44,7 +44,7 @@ public static class ServiceDeskEndpoints
             if (assignment is null) return Results.NoContent();
             var names = await display.GetAsync([], [], [assignment.AssignedByUserId], [assignment.ExternalTechnicianId]);
             return Results.Ok(new { assignment.Id, assignment.SupportTicketId, assignment.ExternalTechnicianId, assignment.AssignedByUserId,
-                assignment.AssignedAt, assignment.ScheduledAt, assignment.Notes,
+                assignment.AssignedAt, assignment.ScheduledAt, assignment.Notes, assignment.WithdrawnAt,
                 TechnicianName = names.Technicians.GetValueOrDefault(assignment.ExternalTechnicianId), AssignedByName = names.Users.GetValueOrDefault(assignment.AssignedByUserId) });
         });
 
@@ -64,9 +64,9 @@ public static class ServiceDeskEndpoints
         });
 
         tickets.MapPost("/{ticketId:int}/approve", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
-            RunTransition(() => service.ApproveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
+            RunTransition(() => service.ApproveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion))).RequireAuthorization("Admin");
         tickets.MapPost("/{ticketId:int}/reject", (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
-            RunTransition(() => service.RejectTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason))).RequireAuthorization("Admin");
+            RunTransition(() => service.RejectTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion))).RequireAuthorization("Admin");
         tickets.MapPost("/{ticketId:int}/assign", async (int ticketId, AssignTicketRequest request, TicketService service, ReferenceService references, ClaimsPrincipal user) =>
         {
             if (request.ScheduledAt <= DateTimeOffset.UtcNow)
@@ -74,26 +74,28 @@ public static class ServiceDeskEndpoints
             if (!(await references.GetAllExternalAsync()).Any(technician => technician.Id == request.ExternalTechnicianId))
                 return Results.BadRequest(new { message = "Select an active external technician." });
             return await RunTransition(() => service.AssignTicketAsync(ticketId, request.ExternalTechnicianId, JwtIdentity.UserId(user),
-                request.ScheduledAt.UtcDateTime, request.Notes, JwtIdentity.UserId(user), request.Reason));
+                request.ScheduledAt.UtcDateTime, request.Notes, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion));
         }).RequireAuthorization("Admin");
         tickets.MapPost("/{ticketId:int}/progress", async (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
             if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
-            return await RunTransition(() => service.StartProgressTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason));
+            return await RunTransition(() => service.StartProgressTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion));
         });
         tickets.MapPost("/{ticketId:int}/resolve", async (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
             if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
-            return await RunTransition(() => service.ResolveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason));
+            return await RunTransition(() => service.ResolveTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion));
         });
         tickets.MapPost("/{ticketId:int}/close", async (int ticketId, TransitionRequest request, TicketService service, ClaimsPrincipal user) =>
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
             if (ticket is null || !JwtIdentity.CanAccessStore(user, ticket.StoreId)) return Results.NotFound();
-            return await RunTransition(() => service.CloseTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason));
+            return await RunTransition(() => service.CloseTicketAsync(ticketId, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion));
         }).RequireAuthorization("Admin");
+        tickets.MapPost("/{ticketId:int}/correct-status", (int ticketId, CorrectionRequest request, TicketService service, ClaimsPrincipal user) =>
+            RunTransition(() => service.CorrectStatusAsync(ticketId, request.EventId, JwtIdentity.UserId(user), request.Reason, request.ExpectedVersion!))).RequireAuthorization("Admin");
         tickets.MapGet("/{ticketId:int}/history", async (int ticketId, TicketService service, ClaimsPrincipal user, IDisplayNameRepository display) =>
         {
             var ticket = await service.GetTicketByIdAsync(ticketId);
@@ -101,7 +103,7 @@ public static class ServiceDeskEndpoints
             var history = await service.GetHistoryByTicketIdAsync(ticketId);
             var names = await display.GetAsync([], [], history.Select(item => item.ChangedByUserId).Distinct().ToArray(), []);
             return Results.Ok(history.Select(item => new { item.Id, item.SupportTicketId, item.PreviousStatus, item.NewStatus,
-                item.ChangedByUserId, item.ChangedAt, item.Reason, ChangedByName = names.Users.GetValueOrDefault(item.ChangedByUserId) }));
+                item.ChangedByUserId, item.ChangedAt, item.Reason, item.ReversesHistoryId, item.TechnicianAssignmentId, ChangedByName = names.Users.GetValueOrDefault(item.ChangedByUserId) }));
         });
 
         api.MapGet("/stores", async (ReferenceService references, ClaimsPrincipal user) =>
@@ -113,23 +115,22 @@ public static class ServiceDeskEndpoints
 
     private static async Task<IResult> RunTransition(Func<Task> action)
     {
-        try { await action(); return Results.NoContent(); }
-        catch (KeyNotFoundException exception) { return Results.NotFound(new { message = exception.Message }); }
-        catch (InvalidOperationException exception) { return Results.Conflict(new { message = exception.Message }); }
-        catch (ArgumentException exception) { return Results.BadRequest(new { message = exception.Message }); }
+        await action();
+        return Results.NoContent();
     }
 }
 
 public record CreateTicketRequest(string Title, string Description, int CategoryId, int StoreId, TicketPriority Priority);
-public record EditTicketRequest(string Title, string Description, TicketPriority Priority);
-public record TransitionRequest(string? Reason);
-public record AssignTicketRequest(int ExternalTechnicianId, string Notes, DateTimeOffset ScheduledAt, string? Reason);
+public record EditTicketRequest(string Title, string Description, TicketPriority Priority, string? ExpectedVersion = null) : IVersionedRequest;
+public record TransitionRequest(string? Reason, string? ExpectedVersion = null) : IVersionedRequest;
+public record AssignTicketRequest(int ExternalTechnicianId, string Notes, DateTimeOffset ScheduledAt, string? Reason, string? ExpectedVersion = null) : IVersionedRequest;
+public record CorrectionRequest(int EventId, string Reason, string? ExpectedVersion = null) : IVersionedRequest;
 
 public record TicketResponse(int Id, string Title, string Description, TicketStatus Status,
     TicketPriority Priority, int StoreId, int CategoryId, int CreatedByUserId, int? AssetId, DateTime CreatedAt,
-    string? StoreName, string? CategoryName, string? CreatedByName)
+    string? StoreName, string? CategoryName, string? CreatedByName, string Version)
 {
     public static TicketResponse From(SupportTicket ticket, DisplayNames names) => new(ticket.Id, ticket.Title, ticket.Description,
         ticket.Status, ticket.Priority, ticket.StoreId, ticket.CategoryId, ticket.CreatedByUserId, ticket.AssetId, ticket.CreatedAt,
-        names.Stores.GetValueOrDefault(ticket.StoreId), names.Categories.GetValueOrDefault(ticket.CategoryId), names.Users.GetValueOrDefault(ticket.CreatedByUserId));
+        names.Stores.GetValueOrDefault(ticket.StoreId), names.Categories.GetValueOrDefault(ticket.CategoryId), names.Users.GetValueOrDefault(ticket.CreatedByUserId), ticket.Version);
 }

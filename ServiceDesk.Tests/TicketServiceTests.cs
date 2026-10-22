@@ -118,7 +118,7 @@ public class TicketServiceTests
         var service = new TicketService(repository, assignmentRepository, historyRepository, new FakeWorkflowTransaction());
 
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             service.RejectTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
     }
 
@@ -195,7 +195,7 @@ public class TicketServiceTests
 
         var service = new TicketService(repository, assignmentRepository, historyRepository, new FakeWorkflowTransaction());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
         service.AssignTicketAsync(
             ticketId: 1,
             externaltechnicianId: 2,
@@ -284,7 +284,7 @@ public class TicketServiceTests
         var service = new TicketService(repository, assignmentRepository, historyRepository, new FakeWorkflowTransaction());
 
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
 
     }
     [Fact]
@@ -349,7 +349,7 @@ public class TicketServiceTests
         var service = new TicketService(repository, assignmentRepository, historyRepository, new FakeWorkflowTransaction());
 
         // Act and Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             service.ResolveTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
     }
     [Fact]
@@ -407,7 +407,7 @@ public class TicketServiceTests
         var historyRepository = new FakeTicketStatusHistoryRepository();
         var service = new TicketService(repository, assignmentRepository, historyRepository, new FakeWorkflowTransaction());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
         service.CloseTicketAsync(ticketId: 1, changedByUserId: 1, reason: ""));
 
 
@@ -542,6 +542,9 @@ public class TicketServiceTests
         public Task<TechnicianAssignment?> GetLatestByTicketIdAsync(int ticketId) =>
             Task.FromResult(AddedAssignment?.SupportTicketId == ticketId ? AddedAssignment : null);
         public TechnicianAssignment? AddedAssignment { get; private set; }
+
+        public Task<TechnicianAssignment?> GetByIdAsync(int id) => Task.FromResult<TechnicianAssignment?>(null);
+        public Task SaveAsync(TechnicianAssignment assignment) => Task.CompletedTask;
 
         public Task AddAsync(TechnicianAssignment assignment)
         {
