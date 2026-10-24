@@ -15,8 +15,6 @@ and frontend run natively; the database has a repeatable Compose configuration.
 Use [the portfolio demonstration](docs/DEMO.md) for the two-role walkthrough,
 screenshot checklist, and interview talking points. The screenshots below are
 actual Chromium renders of disposable demo data.
-[Learning notes](docs/LEARNING.md) explain the changes, concepts, interview
-questions, and an independent exercise.
 
 ## Working features
 
