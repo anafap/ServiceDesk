@@ -11,13 +11,13 @@ afterEach(() => { mock.restoreAll(); setSession(null) })
 
 test('admin actions follow the existing lifecycle and terminal states expose no actions', () => {
   const user = getSession()!.user
-  const expected = [['approve', 'reject'], ['assign'], ['progress'], ['resolve'], ['close'], [], []]
+  const expected = [['approve', 'reject'], ['assign'], [], ['resolve'], ['close'], [], []]
   expected.forEach((actions, index) => assert.deepEqual(availableActions({ storeId: 1, status: (index + 1) as TicketStatus }, user), actions))
 })
 
 test('manager can progress and resolve own-store tickets but cannot close', () => {
   const manager = { id: 21, name: 'Manager', role: 'StoreManager', storeId: 1 } as const
-  for (const [status, expected] of [[1, []], [2, []], [3, ['progress']], [4, ['resolve']], [5, []], [6, []], [7, []]] as const) {
+  for (const [status, expected] of [[1, []], [2, []], [3, []], [4, ['resolve']], [5, []], [6, []], [7, []]] as const) {
     assert.deepEqual(availableActions({ storeId: 1, status }, manager), expected)
     assert.deepEqual(availableActions({ storeId: 2, status }, manager), [])
   }
@@ -63,7 +63,7 @@ test('saved assignment handles no-record and populated responses', async () => {
   mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }))
   assert.equal(await getAssignment(12, new AbortController().signal), null)
   mock.restoreAll()
-  const assignment = { id: 1, supportTicketId: 12, externalTechnicianId: 1, assignedByUserId: 1, assignedAt: '2026-01-01T12:00:00Z', scheduledAt: '2099-01-01T09:00:00Z', notes: 'Visit' }
+  const assignment = { id: 1, supportTicketId: 12, externalTechnicianId: 1, assignedByUserId: 1, assignedAt: '2026-01-01T12:00:00Z', scheduledAt: '2099-01-01T09:00:00Z', notes: 'Visit', version: 'AAAAAAAAAAA=', visitState: 'AwaitingConfirmation', contactName: null, contactPhone: null, confirmedByUserId: null, confirmedAt: null, declineReason: null, repairStartedAt: null }
   mock.method(globalThis, 'fetch', async () => Response.json(assignment))
   assert.deepEqual(await getAssignment(12, new AbortController().signal), assignment)
 })
@@ -78,4 +78,37 @@ test('workflow conflicts and uncertain writes report errors without automatic re
   const fetchMock = mock.method(globalThis, 'fetch', async () => { throw new TypeError('Connection lost') })
   await assert.rejects(performTicketAction(12, 'approve', { reason: null, expectedVersion: 'AAAAAAAAAAA=' }, new AbortController().signal), /Refresh ticket details/)
   assert.equal(fetchMock.mock.callCount(), 1)
+})
+
+test('repair action is available only after visit confirmation and remains store scoped', () => {
+  const manager = { id: 21, name: 'Manager', role: 'StoreManager', storeId: 1 } as const
+  assert.deepEqual(availableActions({ storeId: 1, status: 3 }, manager, false), [])
+  assert.deepEqual(availableActions({ storeId: 1, status: 3 }, manager, true), ['progress'])
+  assert.deepEqual(availableActions({ storeId: 2, status: 3 }, manager, true), [])
+  assert.deepEqual(availableActions({ storeId: 1, status: 3 }, getSession()!.user, true), ['progress'])
+})
+
+test('visit actions send both versions and preserve server conflict messages without retries', async () => {
+  const { changeVisit } = await import('../src/api/ticketWorkflow.ts')
+  const request = { expectedVersion: 'ticket-version', expectedAssignmentVersion: 'assignment-version', contactName: 'Contact', contactPhone: '+973 12345678' }
+  const fetchMock = mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }))
+  for (const action of ['confirm', 'decline', 'reschedule', 'start'] as const) {
+    await changeVisit(12, action, request, new AbortController().signal)
+    const [url, options] = fetchMock.mock.calls.at(-1)!.arguments as unknown as [string, RequestInit]
+    assert.equal(url, `/api/tickets/12/${action === 'start' ? 'progress' : `visit/${action}`}`)
+    assert.deepEqual(JSON.parse(String(options.body)), { reason: null, ...request })
+  }
+  mock.restoreAll()
+  const conflict = mock.method(globalThis, 'fetch', async () => Response.json({ detail: 'Visit time changed. Refresh.' }, { status: 409 }))
+  await assert.rejects(changeVisit(12, 'start', request, new AbortController().signal), /Visit time changed/)
+  assert.equal(conflict.mock.callCount(), 1)
+})
+
+test('assignment parser rejects missing visit contract and incomplete confirmations', async () => {
+  const base = { id: 1, supportTicketId: 12, externalTechnicianId: 1, assignedByUserId: 1, assignedAt: '2026-01-01T12:00:00Z', scheduledAt: '2099-01-01T09:00:00Z', notes: 'Visit' }
+  for (const assignment of [base, { ...base, version: 'version', visitState: 'Confirmed', contactName: null, contactPhone: null, confirmedByUserId: null, confirmedAt: null, declineReason: null, repairStartedAt: null }]) {
+    mock.method(globalThis, 'fetch', async () => Response.json(assignment))
+    await assert.rejects(getAssignment(12, new AbortController().signal), /Unexpected assignment/)
+    mock.restoreAll()
+  }
 })

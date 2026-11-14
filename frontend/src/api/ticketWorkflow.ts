@@ -6,7 +6,11 @@ export type WorkflowAction = 'approve' | 'reject' | 'assign' | 'progress' | 'res
 export type Technician = { id: number; fullName: string; companyName: string }
 export type Assignment = {
   id: number; supportTicketId: number; externalTechnicianId: number; assignedByUserId: number
-  technicianName?: string | null; assignedByName?: string | null
+  technicianName?: string | null; assignedByName?: string | null; confirmedByName?: string | null
+  version: string; visitState: 'AwaitingConfirmation' | 'Confirmed' | 'Declined'
+  contactName: string | null; contactPhone: string | null
+  confirmedByUserId: number | null; confirmedAt: string | null
+  declineReason: string | null; repairStartedAt: string | null
   assignedAt: string; scheduledAt: string | null; notes: string
 }
 export type AssignmentRequest = { externalTechnicianId: number; scheduledAt: string; notes: string; reason: string | null; expectedVersion: string }
@@ -31,10 +35,16 @@ export async function getAssignment(ticketId: number, signal: AbortSignal): Prom
   const data: unknown = await response.json()
   if (typeof data !== 'object' || data === null) throw new Error('Unexpected assignment data.')
   const assignment = data as Record<string, unknown>
-  if (!validDisplayNames(assignment, ['technicianName', 'assignedByName']) || assignment.supportTicketId !== ticketId
+  if (!validDisplayNames(assignment, ['technicianName', 'assignedByName', 'confirmedByName']) || assignment.supportTicketId !== ticketId
     || ![assignment.id, assignment.externalTechnicianId, assignment.assignedByUserId].every(value => typeof value === 'number' && Number.isInteger(value) && value > 0)
     || typeof assignment.assignedAt !== 'string' || Number.isNaN(Date.parse(assignment.assignedAt))
     || (assignment.scheduledAt !== null && (typeof assignment.scheduledAt !== 'string' || Number.isNaN(Date.parse(assignment.scheduledAt))))
+    || typeof assignment.version !== 'string' || assignment.version.length === 0
+    || !['AwaitingConfirmation', 'Confirmed', 'Declined'].includes(String(assignment.visitState))
+    || !['contactName', 'contactPhone', 'declineReason'].every(key => assignment[key] === null || typeof assignment[key] === 'string')
+    || !['confirmedAt', 'repairStartedAt'].every(key => assignment[key] === null || (typeof assignment[key] === 'string' && !Number.isNaN(Date.parse(assignment[key]))))
+    || !(assignment.confirmedByUserId === null || (typeof assignment.confirmedByUserId === 'number' && Number.isInteger(assignment.confirmedByUserId) && assignment.confirmedByUserId > 0))
+    || (assignment.visitState === 'Confirmed' && (!assignment.contactName || !assignment.contactPhone || !assignment.confirmedAt || !assignment.confirmedByUserId))
     || typeof assignment.notes !== 'string') throw new Error('Unexpected assignment data.')
   return assignment as Assignment
 }
@@ -54,4 +64,24 @@ export async function performTicketAction(ticketId: number, action: WorkflowActi
   if (response.status === 409) throw new Error(await problemMessage(response, 'This ticket changed. Refresh ticket details and try again.'))
   if (response.status >= 500) throw new Error(uncertain)
   throw new Error('The update was not accepted. Check the technician, visit time, and other entries before trying again.')
+}
+
+export type VisitAction = 'confirm' | 'decline' | 'reschedule' | 'start'
+export type VisitRequest = {
+  expectedVersion: string; expectedAssignmentVersion: string
+  contactName?: string; contactPhone?: string; reason?: string | null; scheduledAt?: string
+}
+
+export async function changeVisit(ticketId: number, action: VisitAction, request: VisitRequest, signal: AbortSignal): Promise<void> {
+  let response: Response
+  const uncertain = 'We could not confirm the update. Refresh ticket details before trying again.'
+  try {
+    response = await apiFetch(`/api/tickets/${ticketId}/${action === 'start' ? 'progress' : `visit/${action}`}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: null, ...request }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    })
+  } catch { throw new Error(uncertain) }
+  if (response.ok) return
+  if (response.status >= 500) throw new Error(uncertain)
+  throw new Error(await problemMessage(response, `Visit update was not accepted (HTTP ${response.status}).`))
 }

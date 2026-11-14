@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { AppIcon } from './AppIcon'
 
 type EmptyStateProps = {
-  icon: 'overview' | 'tickets'
+  icon: 'overview' | 'tickets' | 'info'
   title: string
   description: string
   children?: ReactNode

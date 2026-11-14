@@ -1,15 +1,17 @@
+import type { ReactNode } from 'react'
 type PageHeaderProps = {
+  actions?: ReactNode
   eyebrow: string
   title: string
   description: string
 }
 
-export function PageHeader({ eyebrow, title, description }: PageHeaderProps) {
+export function PageHeader({ eyebrow, title, description, actions }: PageHeaderProps) {
   return (
     <div className="page-header">
-      <p className="eyebrow">{eyebrow}</p>
+      <div><p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
       <p className="page-description">{description}</p>
-    </div>
+    </div>{actions && <div className="header-actions">{actions}</div>}</div>
   )
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, mock, test } from 'node:test'
-import { createTicket, getTickets } from '../src/api/tickets.ts'
+import { createTicket, getTickets, isTicket, ticketStatusLabel } from '../src/api/tickets.ts'
 import { signInForTest } from './sessionFixture.ts'
 import { setSession } from '../src/auth/session.ts'
 
@@ -13,14 +13,14 @@ beforeEach(signInForTest)
 afterEach(() => { mock.restoreAll(); setSession(null) })
 
 test('loads real-shaped ticket data through the relative API path', async () => {
-  const fetchMock = mock.method(globalThis, 'fetch', async () => Response.json([ticket]))
-  assert.deepEqual(await getTickets(new AbortController().signal), [ticket])
+  const fetchMock = mock.method(globalThis, 'fetch', async () => Response.json({ items: [ticket], totalCount: 1, page: 1, pageSize: 25 }))
+  assert.deepEqual(await getTickets(new AbortController().signal), { items: [ticket], totalCount: 1, page: 1, pageSize: 25 })
   assert.equal(fetchMock.mock.calls[0].arguments[0], '/api/tickets')
 })
 
 test('accepts an empty ticket list', async () => {
-  mock.method(globalThis, 'fetch', async () => Response.json([]))
-  assert.deepEqual(await getTickets(new AbortController().signal), [])
+  mock.method(globalThis, 'fetch', async () => Response.json({ items: [], totalCount: 0, page: 1, pageSize: 25 }))
+  assert.deepEqual(await getTickets(new AbortController().signal), { items: [], totalCount: 0, page: 1, pageSize: 25 })
 })
 
 test('reports unsuccessful HTTP responses instead of treating them as data', async () => {
@@ -44,7 +44,7 @@ test('preserves network failures for the page to report', async () => {
 test('passes cancellation to fetch so leaving the page can cancel a request', async () => {
   mock.method(globalThis, 'fetch', async (_input: unknown, options: RequestInit) => {
     options.signal?.throwIfAborted()
-    return Response.json([])
+    return Response.json({ items: [], totalCount: 0, page: 1, pageSize: 25 })
   })
   const controller = new AbortController()
   controller.abort()
@@ -85,4 +85,16 @@ test('treats server failures or invalid success responses as unconfirmed saves',
     await assert.rejects(createTicket(createRequest, new AbortController().signal), /could not confirm/)
     mock.restoreAll()
   }
+})
+
+
+test('assigned ticket status reflects current visit readiness without changing lifecycle values', () => {
+  assert.equal(ticketStatusLabel({ status: 3, visitState: 'Declined' }), 'Visit time declined')
+  assert.equal(ticketStatusLabel({ status: 3, visitState: 'AwaitingConfirmation' }), 'Awaiting visit confirmation')
+  assert.equal(ticketStatusLabel({ status: 3, visitState: 'Confirmed' }), 'Visit confirmed')
+  assert.equal(ticketStatusLabel({ status: 3 }), 'Assigned')
+  assert.equal(ticketStatusLabel({ status: 4, visitState: 'Declined' }), 'In progress')
+  assert.equal(ticketStatusLabel({ status: 6, visitState: 'Confirmed' }), 'Closed')
+  assert.equal(isTicket({ ...ticket, visitState: 'Declined' }), true)
+  assert.equal(isTicket({ ...ticket, visitState: 'unexpected' }), false)
 })

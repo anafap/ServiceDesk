@@ -1,8 +1,8 @@
 const dateFormat = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC',
+  year: 'numeric', month: 'short', day: 'numeric',
 })
 const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC',
+  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
 })
 
 export function utcTimestamp(value: string) {

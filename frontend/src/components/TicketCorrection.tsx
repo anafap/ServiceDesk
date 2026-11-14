@@ -48,9 +48,9 @@ function CorrectionForm({ ticket, onUpdated, busy, onBusyChange }: { ticket: Tic
   const canCorrect = event?.previousStatus !== null && event?.newStatus === ticket.status
   return <section className="panel ticket-details"><div className="panel-heading"><h2>Correct a status mistake</h2></div><div className="detail-body">
     {loading ? <p role="status">Loading previous event…</p> : !canCorrect ? <p>No recorded previous state is available to correct.</p> : !open ? <button className="button button-secondary" disabled={busy} onClick={() => setOpen(true)}>Correct status</button> : <form onSubmit={submit}>
-      <p>Return <strong>{statusLabels[ticket.status]}</strong> to <strong>{statusLabels[event!.previousStatus!]}</strong> by reversing event #{event!.id}. The original event will remain in history.</p>
-      <label className="form-field">Correction reason<textarea required maxLength={2000} value={reason} disabled={saving} onChange={change => setReason(change.target.value)} /></label>
-      <div className="page-actions"><button className="button button-primary" disabled={busy}>{saving ? 'Correcting…' : 'Confirm correction'}</button><button className="button button-secondary" type="button" disabled={saving} onClick={() => setOpen(false)}>Cancel</button></div>
+      <p className="workflow-note">Return <strong>{statusLabels[ticket.status]}</strong> to <strong>{statusLabels[event!.previousStatus!]}</strong> by reversing event #{event!.id}. The original event will remain in history.</p>
+      <div className="form-field"><label htmlFor="correction-reason">Correction reason</label><textarea id="correction-reason" required rows={3} maxLength={2000} value={reason} disabled={saving} onChange={change => setReason(change.target.value)} /></div>
+      <div className="form-actions"><button className="button button-primary" disabled={busy}>{saving ? 'Correcting…' : 'Confirm correction'}</button><button className="button button-secondary" type="button" disabled={saving} onClick={() => setOpen(false)}>Cancel</button></div>
     </form>}
     {error && <div role="alert"><p className="form-message error-message">{error}</p>{!open && <button className="button button-secondary" onClick={() => { setLoading(true); setError(''); setVersion(value => value + 1) }}>Try again</button>}</div>}
   </div></section>

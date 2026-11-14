@@ -1,3 +1,5 @@
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
+import { FormPanel } from './FormPanel'
 import { useEffect, useRef, useState } from 'react'
 import type { SubmitEvent } from 'react'
 import { getReferenceData } from '../api/referenceData'
@@ -18,11 +20,20 @@ type CreateTicketFormProps = {
   onCancel: () => void
 }
 
-export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps) {
+export function CreateTicketForm({
+  onCreated,
+  onCancel,
+}: CreateTicketFormProps) {
   const session = useSession()
   const [lookups, setLookups] = useState<LookupState>({ status: 'loading' })
   const [lookupVersion, setLookupVersion] = useState(0)
-  const [values, setValues] = useState<TicketFormValues>({ title: '', description: '', storeId: '', categoryId: '', priority: '2' })
+  const [values, setValues] = useState<TicketFormValues>({
+    title: '',
+    description: '',
+    storeId: session?.user.storeId ? String(session.user.storeId) : '',
+    categoryId: '',
+    priority: '2',
+  })
   const [errors, setErrors] = useState<TicketFormErrors>({})
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -38,7 +49,8 @@ export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps)
     const controller = new AbortController()
     getReferenceData(controller.signal)
       .then((data) => {
-        if (!controller.signal.aborted) setLookups({ status: 'success', ...data })
+        if (!controller.signal.aborted)
+          setLookups({ status: 'success', ...data })
       })
       .catch(() => {
         if (!controller.signal.aborted) setLookups({ status: 'error' })
@@ -54,7 +66,11 @@ export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps)
   async function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
     if (activeSave.current || lookups.status !== 'success' || !session) return
-    const validationErrors = validateTicketForm(values, lookups.stores, lookups.categories)
+    const validationErrors = validateTicketForm(
+      values,
+      lookups.stores,
+      lookups.categories,
+    )
     setErrors(validationErrors)
     setSaveError('')
     if (Object.keys(validationErrors).length > 0) {
@@ -68,79 +84,274 @@ export function CreateTicketForm({ onCreated, onCancel }: CreateTicketFormProps)
     activeSave.current = controller
     setSaving(true)
     try {
-      const ticket = await createTicket({
-        title: values.title.trim(), description: values.description.trim(),
-        storeId: Number(values.storeId), categoryId: Number(values.categoryId),
-        priority: Number(values.priority) as TicketPriority,
-      }, controller.signal)
+      const ticket = await createTicket(
+        {
+          title: values.title.trim(),
+          description: values.description.trim(),
+          storeId: Number(values.storeId),
+          categoryId: Number(values.categoryId),
+          priority: Number(values.priority) as TicketPriority,
+        },
+        controller.signal,
+      )
       if (!controller.signal.aborted) onCreated(ticket)
     } catch (error: unknown) {
-      if (!controller.signal.aborted) setSaveError(error instanceof Error ? error.message : 'The ticket could not be saved.')
+      if (!controller.signal.aborted)
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : 'The ticket could not be saved.',
+        )
     } finally {
       activeSave.current = null
       if (!controller.signal.aborted) setSaving(false)
     }
   }
 
-  const canSubmit = session !== null && lookups.status === 'success'
-    && lookups.stores.length > 0 && lookups.categories.length > 0
+  const canSubmit =
+    session !== null &&
+    lookups.status === 'success' &&
+    lookups.stores.length > 0 &&
+    lookups.categories.length > 0
 
+  const dirty =
+    !!values.title ||
+    !!values.description ||
+    !!values.categoryId ||
+    values.priority !== '2' ||
+    (session?.user.role === 'Admin' && !!values.storeId)
+  useUnsavedChanges(dirty)
+  function dismiss() {
+    if (!dirty || window.confirm('Discard your unsaved ticket?')) onCancel()
+  }
   return (
-    <section id="create-ticket" className="panel create-ticket" aria-labelledby="create-ticket-title">
-      <div className="panel-heading"><h2 id="create-ticket-title" ref={heading} tabIndex={-1}>Create a ticket</h2></div>
-      <div className="ticket-form-content">
-        <p className="demo-notice">Requesting as {session?.user.name}. New tickets are sent for approval.</p>
-        {lookups.status === 'loading' && <p role="status" className="lookup-message">Loading stores and categories…</p>}
-        {lookups.status === 'error' && <div className="form-message error-message" role="alert">
-          <p>Stores and categories could not be loaded.</p>
-          <button className="button button-secondary" type="button" onClick={() => { setLookups({ status: 'loading' }); setLookupVersion((version) => version + 1) }}>Try again</button>
-        </div>}
-        {lookups.status === 'success' && (lookups.stores.length === 0 || lookups.categories.length === 0) && <p className="form-message" role="status">A store and category must be available before a ticket can be created.</p>}
-        <form noValidate onSubmit={submit} aria-busy={saving}>
-          <fieldset disabled={!canSubmit || saving} className="ticket-fields">
-            <legend className="visually-hidden">Ticket information. All fields are required.</legend>
-            <div className="form-field field-full">
-              <label htmlFor="ticket-title">Title <span>Required</span></label>
-              <input id="ticket-title" name="title" value={values.title} onChange={(event) => update('title', event.target.value)} maxLength={200} required aria-invalid={Boolean(errors.title)} aria-describedby={errors.title ? 'title-error' : undefined} />
-              {errors.title && <p id="title-error" className="field-error">{errors.title}</p>}
+    <FormPanel
+      title="New maintenance request"
+      onClose={onCancel}
+      dirty={dirty}
+      busy={saving}
+    >
+      <section
+        id="create-ticket"
+        className="panel create-ticket"
+        aria-labelledby="create-ticket-title"
+      >
+        <div className="panel-heading">
+          <h2 id="create-ticket-title" ref={heading} tabIndex={-1}>
+            Create a ticket
+          </h2>
+        </div>
+        <div className="ticket-form-content">
+          <p className="demo-notice">
+            Requesting as {session?.user.name}. New tickets are sent for
+            approval.
+          </p>
+          {lookups.status === 'loading' && (
+            <p role="status" className="lookup-message">
+              Loading stores and categories…
+            </p>
+          )}
+          {lookups.status === 'error' && (
+            <div className="form-message error-message" role="alert">
+              <p>Stores and categories could not be loaded.</p>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setLookups({ status: 'loading' })
+                  setLookupVersion((version) => version + 1)
+                }}
+              >
+                Try again
+              </button>
             </div>
-            <div className="form-field field-full">
-              <label htmlFor="ticket-description">Description <span>Required</span></label>
-              <textarea id="ticket-description" name="description" value={values.description} onChange={(event) => update('description', event.target.value)} maxLength={4000} rows={4} required aria-invalid={Boolean(errors.description)} aria-describedby={errors.description ? 'description-error' : undefined} />
-              {errors.description && <p id="description-error" className="field-error">{errors.description}</p>}
+          )}
+          {lookups.status === 'success' &&
+            (lookups.stores.length === 0 ||
+              lookups.categories.length === 0) && (
+              <p className="form-message" role="status">
+                A store and category must be available before a ticket can be
+                created.
+              </p>
+            )}
+          <form noValidate onSubmit={submit} aria-busy={saving}>
+            <fieldset disabled={!canSubmit || saving} className="ticket-fields">
+              <legend className="visually-hidden">
+                Ticket information. All fields are required.
+              </legend>
+              <div className="form-field field-full">
+                <label htmlFor="ticket-title">
+                  Title <span aria-hidden="true">*</span><span className="visually-hidden"> Required</span>
+                </label>
+                <input
+                  id="ticket-title"
+                  name="title"
+                  value={values.title}
+                  onChange={(event) => update('title', event.target.value)}
+                  maxLength={200}
+                  required
+                  aria-invalid={Boolean(errors.title)}
+                  aria-describedby={errors.title ? 'title-error' : undefined}
+                />
+                {errors.title && (
+                  <p id="title-error" className="field-error">
+                    {errors.title}
+                  </p>
+                )}
+              </div>
+              <div className="form-field field-full">
+                <label htmlFor="ticket-description">
+                  Description <span aria-hidden="true">*</span><span className="visually-hidden"> Required</span>
+                </label>
+                <textarea
+                  id="ticket-description"
+                  name="description"
+                  placeholder="What is happening, where is it, and how is it affecting the store?"
+                  value={values.description}
+                  onChange={(event) =>
+                    update('description', event.target.value)
+                  }
+                  maxLength={4000}
+                  rows={4}
+                  required
+                  aria-invalid={Boolean(errors.description)}
+                  aria-describedby={
+                    errors.description ? 'description-error' : undefined
+                  }
+                />
+                {errors.description && (
+                  <p id="description-error" className="field-error">
+                    {errors.description}
+                  </p>
+                )}
+              </div>
+              <div className="form-field">
+                <label htmlFor="ticket-store">
+                  Store <span aria-hidden="true">*</span><span className="visually-hidden"> Required</span>
+                </label>
+                {session?.user.role === 'StoreManager' ? (
+                  <input
+                    id="ticket-store"
+                    name="storeId"
+                    readOnly
+                    value={
+                      session.user.storeName || `Store #${session.user.storeId}`
+                    }
+                  />
+                ) : (
+                  <select
+                    id="ticket-store"
+                    name="storeId"
+                    value={values.storeId}
+                    onChange={(event) => update('storeId', event.target.value)}
+                    required
+                    aria-invalid={Boolean(errors.storeId)}
+                    aria-describedby={
+                      errors.storeId ? 'store-error' : undefined
+                    }
+                  >
+                    <option value="">Select a store</option>
+                    {lookups.status === 'success' &&
+                      lookups.stores.map((store) => (
+                        <option key={store.id} value={store.id}>
+                          {store.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                {errors.storeId && (
+                  <p id="store-error" className="field-error">
+                    {errors.storeId}
+                  </p>
+                )}
+              </div>
+              <div className="form-field">
+                <label htmlFor="ticket-category">
+                  Category <span aria-hidden="true">*</span><span className="visually-hidden"> Required</span>
+                </label>
+                <select
+                  id="ticket-category"
+                  name="categoryId"
+                  value={values.categoryId}
+                  onChange={(event) => update('categoryId', event.target.value)}
+                  required
+                  aria-invalid={Boolean(errors.categoryId)}
+                  aria-describedby={
+                    errors.categoryId ? 'category-error' : undefined
+                  }
+                >
+                  <option value="">Select a category</option>
+                  {lookups.status === 'success' &&
+                    lookups.categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                </select>
+                {errors.categoryId && (
+                  <p id="category-error" className="field-error">
+                    {errors.categoryId}
+                  </p>
+                )}
+              </div>
+              <div className="form-field">
+                <label htmlFor="ticket-priority">
+                  Priority <span aria-hidden="true">*</span><span className="visually-hidden"> Required</span>
+                </label>
+                <select
+                  id="ticket-priority"
+                  name="priority"
+                  value={values.priority}
+                  onChange={(event) => update('priority', event.target.value)}
+                  required
+                  aria-invalid={Boolean(errors.priority)}
+                  aria-describedby={
+                    errors.priority ? 'priority-error' : undefined
+                  }
+                >
+                  {Object.entries(priorityLabels).map(([id, name]) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                {errors.priority && (
+                  <p id="priority-error" className="field-error">
+                    {errors.priority}
+                  </p>
+                )}
+              </div>
+            </fieldset>
+            {saveError && (
+              <p className="form-message error-message" role="alert">
+                {saveError}
+              </p>
+            )}
+            <div className="form-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={saving}
+                onClick={dismiss}
+              >
+                Cancel
+              </button>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={!canSubmit || saving}
+              >
+                {saving ? 'Saving…' : 'Create ticket'}
+              </button>
             </div>
-            <div className="form-field">
-              <label htmlFor="ticket-store">Store <span>Required</span></label>
-              <select id="ticket-store" name="storeId" value={values.storeId} onChange={(event) => update('storeId', event.target.value)} required aria-invalid={Boolean(errors.storeId)} aria-describedby={errors.storeId ? 'store-error' : undefined}>
-                <option value="">Select a store</option>
-                {lookups.status === 'success' && lookups.stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
-              </select>
-              {errors.storeId && <p id="store-error" className="field-error">{errors.storeId}</p>}
-            </div>
-            <div className="form-field">
-              <label htmlFor="ticket-category">Category <span>Required</span></label>
-              <select id="ticket-category" name="categoryId" value={values.categoryId} onChange={(event) => update('categoryId', event.target.value)} required aria-invalid={Boolean(errors.categoryId)} aria-describedby={errors.categoryId ? 'category-error' : undefined}>
-                <option value="">Select a category</option>
-                {lookups.status === 'success' && lookups.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
-              {errors.categoryId && <p id="category-error" className="field-error">{errors.categoryId}</p>}
-            </div>
-            <div className="form-field">
-              <label htmlFor="ticket-priority">Priority <span>Required</span></label>
-              <select id="ticket-priority" name="priority" value={values.priority} onChange={(event) => update('priority', event.target.value)} required aria-invalid={Boolean(errors.priority)} aria-describedby={errors.priority ? 'priority-error' : undefined}>
-                {Object.entries(priorityLabels).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-              </select>
-              {errors.priority && <p id="priority-error" className="field-error">{errors.priority}</p>}
-            </div>
-          </fieldset>
-          {saveError && <p className="form-message error-message" role="alert">{saveError}</p>}
-          <div className="form-actions">
-            <button className="button button-secondary" type="button" disabled={saving} onClick={onCancel}>Cancel</button>
-            <button className="button button-primary" type="submit" disabled={!canSubmit || saving}>{saving ? 'Saving…' : 'Create ticket'}</button>
-          </div>
-          {saving && <p className="visually-hidden" role="status">Saving your ticket…</p>}
-        </form>
-      </div>
-    </section>
+            {saving && (
+              <p className="visually-hidden" role="status">
+                Saving your ticket…
+              </p>
+            )}
+          </form>
+        </div>
+      </section>
+    </FormPanel>
   )
 }

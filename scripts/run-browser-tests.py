@@ -9,6 +9,9 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+import base64
+import struct
+import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
 connection = os.environ.get('SERVICEDESK_TEST_SQL_CONNECTION')
@@ -32,6 +35,13 @@ for account in ['Admin', 'Manager1', 'Manager2']:
     env[f'DemoData__{account}__Email'] = env[f'E2E_{account.upper()}_EMAIL'] = email
     env[f'DemoData__{account}__Password'] = env[f'E2E_{account.upper()}_PASSWORD'] = password
 logs = Path(tempfile.mkdtemp(prefix='servicedesk-browser-'))
+env['Photos__Enabled'] = 'true' if env.get('SERVICEDESK_E2E_PHOTOS') == '1' else 'false'
+env['Photos__Root'] = str(logs / 'photos')
+env['E2E_SCREENSHOT_DIR'] = str(logs / 'screenshots')
+def png_chunk(kind, data):
+    return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data) & 0xffffffff)
+png = b'\x89PNG\r\n\x1a\n' + png_chunk(b'IHDR', struct.pack('!IIBBBBB', 2, 2, 8, 2, 0, 0, 0)) + png_chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff\x00\x00' * 2)) + png_chunk(b'IEND', b'')
+env['E2E_PHOTO_BASE64'] = base64.b64encode(png).decode()
 processes = []
 
 def run(command):
@@ -64,6 +74,8 @@ try:
     wait_for('http://127.0.0.1:5201/api/tickets', 401, api)
     frontend = start(['npm', '--prefix', 'frontend', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', '5174', '--strictPort'], 'frontend')
     wait_for('http://127.0.0.1:5174', 200, frontend)
+    if env.get('SERVICEDESK_E2E_PHOTOS') == '1':
+        start(['dotnet', 'run', '--no-build', '--no-restore', '--project', 'ServiceDesk.Api', '--no-launch-profile', '--', '--photo-worker', '--browser-test-host'], 'photos')
     print('Running Chromium walkthrough on disposable data.', flush=True)
     run(['npm', '--prefix', 'frontend', 'run', 'test:browser'])
 finally:

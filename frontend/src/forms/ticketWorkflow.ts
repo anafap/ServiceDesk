@@ -4,18 +4,18 @@ import type { Technician, WorkflowAction } from '../api/ticketWorkflow'
 
 export const actionLabels: Record<WorkflowAction, string> = {
   approve: 'Approve ticket', reject: 'Reject ticket', assign: 'Assign technician',
-  progress: 'Start progress', resolve: 'Resolve ticket', close: 'Close ticket',
+  progress: 'Start repair', resolve: 'Resolve ticket', close: 'Close ticket',
 }
 
-export function availableActions(ticket: Pick<Ticket, 'storeId' | 'status'>, user: AuthUser): WorkflowAction[] {
+export function availableActions(ticket: Pick<Ticket, 'storeId' | 'status'>, user: AuthUser, visitConfirmed = false): WorkflowAction[] {
   if (user.role === 'StoreManager') {
     if (user.storeId !== ticket.storeId) return []
-    return ticket.status === 3 ? ['progress'] : ticket.status === 4 ? ['resolve'] : []
+    return ticket.status === 3 ? (visitConfirmed ? ['progress'] : []) : ticket.status === 4 ? ['resolve'] : []
   }
   switch (ticket.status) {
     case 1: return ['approve', 'reject']
     case 2: return ['assign']
-    case 3: return ['progress']
+    case 3: return visitConfirmed ? ['progress'] : []
     case 4: return ['resolve']
     case 5: return ['close']
     default: return []

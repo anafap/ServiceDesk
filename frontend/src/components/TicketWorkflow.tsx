@@ -79,11 +79,11 @@ export function TicketWorkflow({ ticket, onUpdated, onBusyChange }: {
 
   const assignmentUnavailable = action === 'assign' && (technicians.status !== 'success' || technicians.technicians.length === 0)
 
-  return <section className="panel ticket-details" aria-labelledby="workflow-title">
-    <div className="panel-heading"><h2 id="workflow-title">Workflow</h2></div>
+  return <section className="panel ticket-details workflow-panel" aria-labelledby="workflow-title">
+    <div className="panel-heading"><h2 id="workflow-title">Next action</h2></div>
     <div className="ticket-form-content">
       {actions.length === 0 && <p className="workflow-note">{ticket.status === 6 ? 'This ticket is closed.' : ticket.status === 7 ? 'This ticket was rejected.' : 'No workflow actions are available for your role at this stage.'}</p>}
-      {!action && <div className="workflow-buttons">{actions.map((action) => <button key={action} className={`button ${action === 'reject' ? 'button-danger' : 'button-primary'}`} type="button" onClick={() => chooseAction(action)}>{actionLabels[action]}</button>)}</div>}
+      {!action && <div className="workflow-buttons">{actions.map((action) => <button key={action} className={`button ${action === 'reject' ? 'button-secondary' : 'button-primary'}`} type="button" onClick={() => chooseAction(action)}>{actionLabels[action]}</button>)}</div>}
       {action && <form noValidate onSubmit={submit} aria-busy={saving}>
         <h3 className="action-title" ref={actionHeading} tabIndex={-1}>{actionLabels[action]}</h3>
         {action === 'reject' && <p className="workflow-note">Rejecting ends this request. A rejected ticket cannot continue through the workflow.</p>}
@@ -100,14 +100,14 @@ export function TicketWorkflow({ ticket, onUpdated, onBusyChange }: {
               </select>{errors.technicianId && <p id="technician-error" className="field-error">{errors.technicianId}</p>}</div>
             <div className="form-field"><label htmlFor="assign-visit">Visit time (your local time)</label>
               <input id="assign-visit" name="scheduledAt" type="datetime-local" value={scheduledAt} required onChange={(event) => { setScheduledAt(event.target.value); setErrors((current) => ({ ...current, scheduledAt: undefined })) }} aria-invalid={Boolean(errors.scheduledAt)} aria-describedby={errors.scheduledAt ? 'visit-error visit-hint' : 'visit-hint'} />
-              <p id="visit-hint" className="field-hint">The saved visit time is displayed in UTC.</p>{errors.scheduledAt && <p id="visit-error" className="field-error">{errors.scheduledAt}</p>}</div>
+              <p id="visit-hint" className="field-hint">Times are shown in your local timezone.</p>{errors.scheduledAt && <p id="visit-error" className="field-error">{errors.scheduledAt}</p>}</div>
             <div className="form-field field-full"><label htmlFor="assign-notes">Visit notes (optional)</label><textarea id="assign-notes" value={notes} rows={3} maxLength={4000} onChange={(event) => setNotes(event.target.value)} /></div>
           </>}
           <div className="form-field field-full"><label htmlFor="workflow-reason">Reason (optional)</label><textarea id="workflow-reason" value={reason} rows={2} maxLength={4000} onChange={(event) => setReason(event.target.value)} /></div>
         </fieldset>
         {message && <p className="form-message error-message" role="alert">{message}</p>}
         <div className="form-actions"><button className="button button-secondary" type="button" disabled={saving} onClick={() => setAction(null)}>Cancel</button>
-          <button className={`button ${action === 'reject' ? 'button-danger' : 'button-primary'}`} type="submit" disabled={saving || assignmentUnavailable}>{saving ? 'Saving…' : `Confirm: ${actionLabels[action].toLowerCase()}`}</button></div>
+          <button className={`button ${action === 'reject' ? 'button-danger' : 'button-primary'}`} type="submit" disabled={saving || assignmentUnavailable}>{saving ? 'Saving…' : 'Confirm'}</button></div>
       </form>}
     </div>
   </section>
