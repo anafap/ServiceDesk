@@ -23,6 +23,32 @@ The frontend stores tokens only in tab memory. Logout/reload clears that local
 session. Logout alone does not revoke a copied token; account changes invalidate
 all previous sessions. Refresh tokens and per-session revocation remain deferred.
 
+## Shared demo accounts
+
+With `Hosting:DemoInstance=true`, the API makes `/api/account` and
+`/api/admin/store-managers` read-only. Profile/password changes and all manager
+mutations return 403 Problem Details with a trace ID and “Account changes are
+disabled in this demo.” The guard runs before manager version validation; existing
+authentication and role checks still apply. Login, authorized reads and ticket
+workflows remain available. Command-line provisioning is outside this HTTP guard.
+The setting defaults to false, preserving normal account management for business
+deployments. Frontend controls are unchanged in this API-only increment.
+
+Implementation: `DemoAccountReadOnlyFilter` is shared by both account endpoint
+groups, keeping the deployment rule at the HTTP boundary. Security API tests cover
+both roles, every account mutation, unchanged account snapshots, normal-mode writes,
+authorization and available ticket operations. No application/domain or schema
+changes are needed.
+
+Maintainer questions:
+1. Why enforce this in the API? A caller can bypass frontend controls.
+2. Why keep the role policies? Demo mode must not grant manager-directory access.
+3. Why keep normal-mode tests? A deployment restriction must preserve business use.
+
+Independent exercise: on an isolated demo instance, attempt a password change and
+confirm the 403 message, then sign in again with the original password.
+Suggested commit: `Protect shared demo accounts from API changes`.
+
 ## Versioned writes
 
 Ticket, store, technician and manager responses include an opaque `version`.

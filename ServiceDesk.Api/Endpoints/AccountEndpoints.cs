@@ -8,7 +8,7 @@ public static class AccountEndpoints
 {
     public static void MapAccountEndpoints(this WebApplication app)
     {
-        var account = app.MapGroup("/api/account").RequireAuthorization();
+        var account = app.MapGroup("/api/account").RequireAuthorization().AddEndpointFilter<DemoAccountReadOnlyFilter>();
         account.MapGet("", async (ClaimsPrincipal principal, AccountService service, IDisplayNameRepository display) =>
             Results.Ok(await Response(await service.GetAsync(JwtIdentity.UserId(principal)), display)));
         account.MapPut("/profile", async (ProfileInput input, ClaimsPrincipal principal, AccountService service, IDisplayNameRepository display) =>

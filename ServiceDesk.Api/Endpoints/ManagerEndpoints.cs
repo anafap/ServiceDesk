@@ -7,7 +7,8 @@ public static class ManagerEndpoints
 {
     public static void MapManagerEndpoints(this WebApplication app)
     {
-        var managers = app.MapGroup("/api/admin/store-managers").RequireAuthorization("Admin").AddEndpointFilter<VersionFilter>();
+        var managers = app.MapGroup("/api/admin/store-managers").RequireAuthorization("Admin")
+            .AddEndpointFilter<DemoAccountReadOnlyFilter>().AddEndpointFilter<VersionFilter>();
         managers.MapGet("", async (ManagerService service, IDisplayNameRepository display) =>
         {
             var users = await service.GetAllAsync();

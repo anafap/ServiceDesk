@@ -55,6 +55,20 @@ SETUP.md. Normal startup does not provision or reset accounts. Business database
 must not use demo provisioning. Admin creates stores and managers through the UI;
 the provisioning command adds a General maintenance category when none exists (no category UI).
 
+## Shared demo account protection
+
+Set `Hosting__DemoInstance=true` on the isolated demo deployment to make account
+management read-only. Authenticated account mutations return 403 Problem Details
+with a trace ID and “Account changes are disabled in this demo.” This blocks profile
+edits, password changes, and manager creation/editing/activation/reassignment/password
+reset. Account and manager-directory reads retain their existing authorization.
+Login and ticket workflows remain available. Frontend controls are unchanged;
+attempted account changes display the API error. Explicit command-line provisioning
+remains available to the operator.
+
+The setting defaults to false. Keep it false or absent for normal business account
+management. No schema migration is required for these restrictions.
+
 ## Provider comparison and budget constraints
 
 Azure is the cost-first shortlist: its SQL Database free allowance renews monthly

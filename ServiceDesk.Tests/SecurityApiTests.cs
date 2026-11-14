@@ -501,7 +501,130 @@ public class SecurityApiTests : IDisposable
         Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/resolve", new { })).StatusCode);
     }
 
-    private sealed class TestApi(bool development = false, int loginLimit = 1000) : WebApplicationFactory<Program>
+    private static async Task SignInClient(HttpClient client, string email)
+    {
+        using var response = await client.PostAsJsonAsync("/api/auth/login", new { email, password = TestApi.Password });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var session = (await response.Content.ReadFromJsonAsync<LoginResponse>())!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
+    }
+
+    private static async Task AssertDemoRejection(HttpResponseMessage response)
+    {
+        using (response)
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Account changes are disabled in this demo.", problem.GetProperty("detail").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("traceId").GetString()));
+        }
+    }
+
+    [Theory]
+    [InlineData(true, "admin@example.test")]
+    [InlineData(true, "manager@example.test")]
+    [InlineData(false, "admin@example.test")]
+    [InlineData(false, "manager@example.test")]
+    [InlineData(null, "admin@example.test")]
+    [InlineData(null, "manager@example.test")]
+    public async Task Demo_mode_protects_profiles_and_passwords_without_changing_normal_mode(bool? demoInstance, string email)
+    {
+        using var api = new TestApi(demoInstance: demoInstance);
+        using var client = api.CreateClient();
+        await SignInClient(client, email);
+        var before = api.Data.AccountSnapshot();
+        var profile = await client.GetFromJsonAsync<JsonElement>("/api/account");
+        var edit = await client.PutAsJsonAsync("/api/account/profile", new {
+            firstName = "Updated", lastName = "Name", phoneNumber = "123", expectedVersion = profile.GetProperty("version").GetString()
+        });
+        if (demoInstance == true) await AssertDemoRejection(edit);
+        else
+        {
+            Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+            Assert.Equal("Updated", (await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("firstName").GetString());
+            edit.Dispose();
+        }
+        var password = await client.PostAsJsonAsync("/api/account/change-password", new { currentPassword = TestApi.Password, newPassword = "Changed-Test-Pass8!" });
+        if (demoInstance == true)
+        {
+            await AssertDemoRejection(password);
+            Assert.Equal(before, api.Data.AccountSnapshot());
+            await SignInClient(client, email);
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.NoContent, password.StatusCode);
+            password.Dispose();
+            Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/account")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "Changed-Test-Pass8!" })).StatusCode);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task Demo_mode_protects_all_manager_mutations_without_changing_normal_mode(bool? demoInstance)
+    {
+        using var api = new TestApi(demoInstance: demoInstance);
+        using var client = api.CreateClient();
+        await SignInClient(client, "admin@example.test");
+        var before = api.Data.AccountSnapshot();
+        var version = Convert.ToBase64String(new byte[8]);
+        var requests = new (HttpMethod Method, string Path, object Body, HttpStatusCode Success)[] {
+            (HttpMethod.Post, "/api/admin/store-managers", new { firstName = "New", lastName = "Manager", email = "new@example.test", phoneNumber = "123", storeId = 1, password = TestApi.Password }, HttpStatusCode.Created),
+            (HttpMethod.Put, "/api/admin/store-managers/21", new { firstName = "Edited", lastName = "Manager", email = "edited@example.test", phoneNumber = "123", storeId = 2, expectedVersion = version }, HttpStatusCode.OK),
+            (HttpMethod.Patch, "/api/admin/store-managers/21/status", new { isActive = false, expectedVersion = version }, HttpStatusCode.NoContent),
+            (HttpMethod.Patch, "/api/admin/store-managers/21/status", new { isActive = true, expectedVersion = version }, HttpStatusCode.NoContent),
+            (HttpMethod.Post, "/api/admin/store-managers/21/reset-password", new { password = "Changed-Test-Pass8!", expectedVersion = version }, HttpStatusCode.NoContent)
+        };
+        foreach (var request in requests)
+        {
+            using var message = new HttpRequestMessage(request.Method, request.Path) { Content = JsonContent.Create(request.Body) };
+            var response = await client.SendAsync(message);
+            if (demoInstance == true)
+            {
+                await AssertDemoRejection(response);
+                Assert.Equal(before, api.Data.AccountSnapshot());
+            }
+            else
+            {
+                Assert.Equal(request.Success, response.StatusCode);
+                response.Dispose();
+            }
+        }
+        var managers = await client.GetFromJsonAsync<JsonElement>("/api/admin/store-managers");
+        Assert.Equal(demoInstance == true ? 1 : 2, managers.GetArrayLength());
+        if (demoInstance != true)
+        {
+            var edited = (await api.Data.GetManagerAsync(21))!;
+            Assert.Equal("edited@example.test", edited.Email);
+            Assert.Equal(2, edited.StoreId);
+            Assert.True(edited.IsActive);
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/login", new { email = edited.Email, password = "Changed-Test-Pass8!" })).StatusCode);
+        }
+    }
+
+    [Fact]
+    public async Task Demo_guard_preserves_authorization_ticket_workflows_and_precedes_version_validation()
+    {
+        using var api = new TestApi(demoInstance: true);
+        using var client = api.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/account/change-password", new { currentPassword = TestApi.Password, newPassword = "Changed-Test-Pass8!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/admin/store-managers")).StatusCode);
+        await SignInClient(client, "manager@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/store-managers")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/admin/store-managers/21/reset-password", new { password = "Changed-Test-Pass8!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/tickets")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/tickets/1/comments", new { text = "Demo discussion still works" })).StatusCode);
+        await SignInClient(client, "admin@example.test");
+        await AssertDemoRejection(await client.PostAsJsonAsync("/api/admin/store-managers/21/reset-password", new { password = "Changed-Test-Pass8!" }));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/tickets/1/approve", new { expectedVersion = Convert.ToBase64String(new byte[8]) })).StatusCode);
+        Assert.Equal(TicketStatus.Approved, api.Data.Tickets[0].Status);
+    }
+
+    private sealed class TestApi(bool development = false, int loginLimit = 1000, bool? demoInstance = null) : WebApplicationFactory<Program>
     {
         public const string Password = "Test-only-Passw0rd!";
         public const string Issuer = "servicedesk-tests";
@@ -517,6 +640,9 @@ public class SecurityApiTests : IDisposable
                 ["Jwt:Key"] = Key, ["Jwt:Issuer"] = Issuer, ["Jwt:Audience"] = Audience,
                 ["DemoUser:Email"] = "", ["DemoUser:Password"] = "", ["LoginRateLimit:PermitLimit"] = loginLimit.ToString()
             }));
+            if (demoInstance.HasValue)
+                builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                    new Dictionary<string, string?> { ["Hosting:DemoInstance"] = demoInstance.Value.ToString() }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IUserRepository>();
@@ -530,6 +656,8 @@ public class SecurityApiTests : IDisposable
                 services.AddSingleton<ITicketQueryRepository>(Data);
                 services.RemoveAll<IDiscussionRepository>();
                 services.AddSingleton<IDiscussionRepository>(Data);
+                services.RemoveAll<IManagerRepository>();
+                services.AddSingleton<IManagerRepository>(Data);
                 services.RemoveAll<IAccountRepository>();
                 services.AddSingleton<IAccountRepository>(Data);
                 services.AddSingleton<IUserRepository>(Data);
@@ -652,7 +780,7 @@ public class SecurityApiTests : IDisposable
             users.ToDictionary(id => id, id => $"User {id}"), technicians.ToDictionary(id => id, id => $"Technician {id}")));
     }
 
-    private sealed class TestData : IUserRepository, ISupportTicketRepository, IReferenceDataRepository, ITicketQueryRepository, IDiscussionRepository, IAccountRepository,
+    private sealed class TestData : IManagerRepository, IUserRepository, ISupportTicketRepository, IReferenceDataRepository, ITicketQueryRepository, IDiscussionRepository, IAccountRepository,
         ITicketStatusHistoryRepository, ITechnicianAssignmentRepository
     {
         public List<TicketComment> Comments { get; } = [];
@@ -682,7 +810,7 @@ public class SecurityApiTests : IDisposable
         public List<SupportTicket> Tickets { get; } = [MakeTicket(1, 1), MakeTicket(2, 2)];
         public List<TicketStatusHistory> History { get; } = [];
         public List<TechnicianAssignment> Assignments { get; } = [];
-        private readonly User[] _users = [MakeUser(11, "admin@example.test", UserRole.Admin, null), MakeUser(21, "manager@example.test", UserRole.StoreManager, 1)];
+        private readonly List<User> _users = [MakeUser(11, "admin@example.test", UserRole.Admin, null), MakeUser(21, "manager@example.test", UserRole.StoreManager, 1)];
 
         private static void SetId(object entity, int id) => entity.GetType().GetProperty("Id")!.SetValue(entity, id);
         private static SupportTicket MakeTicket(int id, int storeId)
@@ -697,6 +825,12 @@ public class SecurityApiTests : IDisposable
             user.SetPasswordHash(new PasswordHasher<User>().HashPassword(user, TestApi.Password));
             return user;
         }
+        public string AccountSnapshot() => JsonSerializer.Serialize(_users);
+        public Task<List<User>> GetManagersAsync() => Task.FromResult(_users.Where(user => user.Role == UserRole.StoreManager).ToList());
+        public Task<User?> GetManagerAsync(int id) => Task.FromResult(_users.SingleOrDefault(user => user.Id == id && user.Role == UserRole.StoreManager));
+        public Task<bool> EmailExistsAsync(string normalizedEmail, int? exceptId) => Task.FromResult(_users.Any(user => user.NormalizedEmail == normalizedEmail && user.Id != exceptId));
+        public Task<bool> IsActiveStoreAsync(int storeId) => Task.FromResult(storeId is 1 or 2);
+        public Task AddAsync(User user) { SetId(user, _users.Max(item => item.Id) + 1); _users.Add(user); return Task.CompletedTask; }
         Task<User?> IUserRepository.GetByIdAsync(int id) => Task.FromResult(_users.SingleOrDefault(user => user.Id == id));
         Task<TechnicianAssignment?> ITechnicianAssignmentRepository.GetByIdAsync(int id) => Task.FromResult(Assignments.SingleOrDefault(item => item.Id == id));
         public Task SaveAsync(TechnicianAssignment assignment) => Task.CompletedTask;
