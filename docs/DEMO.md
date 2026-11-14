@@ -17,8 +17,10 @@ writes use SQL transactions, verified with real rollback tests.
    its details, approve it, and assign an active technician with a future visit.
 3. Sign in as Manager2. Confirm the other store's ticket is absent; its direct
    detail URL returns the unavailable/not-found view.
-4. Return as Manager1. Start progress when work begins, mark resolved after
-   checking the repair. Sign back in as Admin to close the resolved request.
+4. Return as Manager1. Confirm the proposed visit time and enter a contact name
+   and phone, or decline with a reason so Admin can propose another time. Once
+   confirmed, Admin or Manager1 selects Start repair when the technician arrives.
+   Manager1 marks resolved after checking the repair. Sign back in as Admin to close the resolved request.
    Explain that transitions must happen in sequence and the API enforces the
    same role rules as the UI.
 5. Show named actors, technician, and UTC timestamps in assignment/history.
@@ -33,7 +35,8 @@ writes use SQL transactions, verified with real rollback tests.
 9. Explain atomic saves: history or assignment failure rolls back the ticket
    change, and SQL integration tests verify persisted state using fresh contexts.
 
-Use demo-only contacts and data. No notifications are sent. Do not show passwords,
+Use demo-only contacts and data. In-app notifications are recorded; no email or
+technician messages are sent. Do not show passwords,
 JWTs, user-secrets, connection strings, or personal contact information on video.
 
 ## Screenshot checklist

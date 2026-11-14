@@ -159,3 +159,22 @@ reassignment, password reset, deactivation/reactivation and old-token rejection.
 Screenshots in `docs/screenshots` are real renders of disposable demo records.
 Playwright's failed-test artifacts are Git-ignored. An interrupted process may
 leave its test-prefixed database; never delete a non-test database as cleanup.
+
+## Pilot increment
+
+The additive AddPilotCommunication migration adds comments, notifications and private
+photo-processing metadata. Back up and review upgrade SQL before applying it to an
+existing database. Current source requires that schema. No migration runs at startup.
+For the changed ticket-list contract, account password page and optional local scanner/
+worker setup, see [PILOT.md](PILOT.md). For the combined production image and explicit
+account provisioning, see [HOSTING.md](HOSTING.md).
+
+
+## Visit-confirmation upgrade
+
+Migration `20261113113214_AddVisitConfirmation` requires the same fresh-backup and
+restored-copy review as other existing-database upgrades. It preserves old records;
+Assigned tickets need manager confirmation before repair starts, while existing
+InProgress/Resolved/Closed work may finish. API/frontend/schema must be upgraded
+together. The updated API does not migrate at startup. See
+[visit coordination and verification](VISIT_CONFIRMATION.md).

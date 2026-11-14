@@ -46,7 +46,8 @@ Closed and rejected tickets cannot be edited directly. For an accidental closure
 or rejection, Admin uses Correct status to return to the previous state, then
 makes the correction through the normal workflow. The original event remains;
 a new entry records the actor, UTC time, reason and reversed event ID. A
-correction can itself be reversed, retaining the same audit trail.
+correction can itself be reversed, retaining the same audit trail, except returning
+Assigned directly to InProgress requires fresh visit confirmation and Start repair.
 
 Reversing an assignment to Approved withdraws the assignment without deleting
 it. Reversing that correction restores the recorded assignment. These changes
@@ -81,3 +82,36 @@ a larger test limit; a focused API test verifies the limiter independently.
 Use HTTPS and a least-privilege database login when deploying. Public hosting,
 account lockout, pagination and advanced infrastructure work remain separate from
 this local portfolio release.
+
+## Pilot communication and private uploads
+
+Comments are plain text and append-only; ticket store access is enforced before
+reading or posting. Terminal tickets reject new discussion and photos. Posting
+touches the ticket rowversion to reject a competing close without partial writes.
+Comment/history/assignment data remains distinct.
+
+Notifications are recipient-scoped and transactionally persisted. Their ticket access
+is checked again on every read; manager reassignment hides old-store notifications.
+Password change requires the current password and invalidates previous sessions.
+
+Photo uploads default off. When enabled, originals remain private and quarantined
+until a fresh-signature ClamAV scan, bounded separate-process JPEG/PNG decoding and
+metadata stripping, and output scan complete. Only ready PNG files are served through
+authorized API reads with no-store/nosniff headers. Scanner failure never permits
+release. A scanner process is not a guarantee against all malicious content. Keep
+image libraries, scanners, signatures and operating systems patched.
+
+See [pilot contracts and limits](PILOT.md) and [hosting release gates](HOSTING.md).
+Database/photo backups, least-privilege credentials, HTTPS and recovery/monitoring
+configuration still require verification on the selected hosting environment.
+
+
+## Visit confirmation gate
+
+Only the own-store manager confirms or declines a proposed visit; Admin proposes
+replacement times and cannot bypass confirmation. Admin or the own-store manager
+can start repair only after confirmation of the current visit with a contact name
+and phone. Visit actions require both ticket and assignment versions. Ticket
+revision and assignment rowversions guard reschedule/start/correction races, with
+visit audit and notification persistence sharing the workflow transaction.
+See [visit contracts, migration and compatibility](VISIT_CONFIRMATION.md).

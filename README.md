@@ -47,7 +47,9 @@ AwaitingApproval → Approved → Assigned → InProgress → Resolved → Close
 | Dashboard/list/detail/history/assignment | All stores | Assigned store only |
 | Create/edit tickets | All stores | Assigned store only |
 | Approve/reject/assign technician | Yes | No |
-| Start progress / resolve | All stores | Assigned store only |
+| Confirm/decline visit time and enter contact | Not allowed | Assigned store only |
+| Change visit time | All stores, before repair starts | Not allowed |
+| Start repair / resolve | All stores; repair requires store confirmation | Assigned store only; repair requires confirmation |
 | Close resolved tickets | All stores | No |
 | Manage stores, technicians and manager accounts | Yes | No |
 | Correct the latest recorded status event | Yes, with reason | No |
@@ -152,9 +154,20 @@ Logout does not revoke copied tokens. Use HTTPS for hosted environments.
 
 This release targets a local portfolio demo. Public deployment, multi-store
 manager assignments, refresh tokens, per-session logout revocation, public
-password recovery, notifications, historical name snapshots and server-side
-pagination remain deferred. Account access/password/store changes invalidate old
+password recovery and historical name snapshots remain deferred. In-app notifications
+and server-side pagination are covered by the pilot increment below. Account access/password/store changes invalidate old
 tokens. Application passwords contain 8–128 characters.
+
+## Interface redesign
+
+The redesigned workspace includes role-specific action queues, responsive ticket
+and administration views, shared form panels, and working Profile and Security
+settings. See [the redesign behavior, APIs, and verification guide](docs/UX_REDESIGN.md).
+[Desktop preview](docs/screenshots/redesign/overview-1440.png) ·
+[Account settings](docs/screenshots/redesign/account-1440.png) ·
+[Mobile tickets](docs/screenshots/redesign/tickets-390.png).
+These previews use fictional browser-test fixtures; the screenshots below are from
+the earlier real-database walkthrough.
 
 ## Actual application screenshots
 
@@ -167,3 +180,14 @@ More screenshots: [ticket filters](docs/screenshots/ticket-filters.png),
 [mobile layout](docs/screenshots/manager-mobile.png),
 [stores](docs/screenshots/store-administration.png), and
 [technicians](docs/screenshots/technician-administration.png).
+
+## Pilot-readiness increment
+
+Ticket discussion, SQL pagination/dashboard aggregates, in-app notifications, self-service
+password change and quarantined JPEG/PNG processing are implemented. See
+[feature and API details](docs/PILOT.md) and [hosting preparation](docs/HOSTING.md).
+Photo uploads default off until private storage, a worker and scanner are configured.
+The new migration must be reviewed/applied before running against an existing database.
+Hosting/provider selection and live-business rollout remain separate steps.
+
+Visit confirmation and contact coordination: [workflow and API guide](docs/VISIT_CONFIRMATION.md).
