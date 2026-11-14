@@ -58,7 +58,10 @@ public class HardeningSqlTests
         await Correct();
         Assert.Equal(TicketStatus.Assigned, ticket.Status);
         Assert.Equal(assignmentId, (await service.GetLatestAssignmentAsync(ticket.Id))!.Id);
-        await service.StartProgressTicketAsync(ticket.Id, 1, null, ticket.Version);
+        var visit = (await service.GetLatestAssignmentAsync(ticket.Id))!;
+        await service.ChangeVisitAsync(ticket.Id, 1, "confirm", ticket.Version, visit.Version, "Store contact", "12345678");
+        visit = (await service.GetLatestAssignmentAsync(ticket.Id))!;
+        await service.StartProgressTicketAsync(ticket.Id, 1, null, ticket.Version, visit.Version);
         await service.ResolveTicketAsync(ticket.Id, 1, null, ticket.Version);
         await service.CloseTicketAsync(ticket.Id, 1, null, ticket.Version);
         await Assert.ThrowsAnyAsync<InvalidOperationException>(() => service.UpdateTicketDetailsAsync(ticket.Id, "Changed", "Changed", TicketPriority.High, ticket.Version));

@@ -6,6 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
     <!-- Patch the SQL client's transitive cryptography dependency in the deployed API too. -->
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />

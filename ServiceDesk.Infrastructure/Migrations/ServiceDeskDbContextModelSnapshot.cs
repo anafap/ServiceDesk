@@ -108,6 +108,48 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.ToTable("ExternalTechnicians", (string)null);
                 });
 
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.Notification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RecipientId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SupportTicketId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupportTicketId");
+
+                    b.HasIndex("RecipientId", "EventKey")
+                        .IsUnique();
+
+                    b.HasIndex("RecipientId", "Id");
+
+                    b.ToTable("Notifications");
+                });
+
             modelBuilder.Entity("ServiceDesk.Domain.Entities.Store", b =>
                 {
                     b.Property<int>("Id")
@@ -178,6 +220,9 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("nvarchar(4000)");
 
+                    b.Property<DateTime?>("LastDiscussionAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Priority")
                         .HasColumnType("int");
 
@@ -197,6 +242,9 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("VisitRevision")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -225,6 +273,24 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.Property<int>("AssignedByUserId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ConfirmedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("DeclineReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<int>("ExternalTechnicianId")
                         .HasColumnType("int");
 
@@ -232,11 +298,27 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("RepairStartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
                     b.Property<DateTime?>("ScheduledAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("SupportTicketId")
                         .HasColumnType("int");
+
+                    b.Property<string>("VisitState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)")
+                        .HasDefaultValue("AwaitingConfirmation");
 
                     b.Property<DateTime?>("WithdrawnAt")
                         .HasColumnType("datetime2");
@@ -245,11 +327,63 @@ namespace ServiceDesk.Infrastructure.Migrations
 
                     b.HasIndex("AssignedByUserId");
 
+                    b.HasIndex("ConfirmedByUserId");
+
                     b.HasIndex("ExternalTechnicianId");
 
                     b.HasIndex("SupportTicketId", "WithdrawnAt", "AssignedAt");
 
                     b.ToTable("TechnicianAssignments");
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AuthorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContentKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("SupportTicketId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("SupportTicketId", "State");
+
+                    b.HasIndex("State", "LeaseUntil", "CreatedAt");
+
+                    b.ToTable("TicketAttachments");
                 });
 
             modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketCategory", b =>
@@ -268,6 +402,37 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TicketCategories", (string)null);
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AuthorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("SupportTicketId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("SupportTicketId", "Id");
+
+                    b.ToTable("TicketComments");
                 });
 
             modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketStatusHistory", b =>
@@ -390,11 +555,72 @@ namespace ServiceDesk.Infrastructure.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.VisitEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ContactName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ContactPhone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("ScheduledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TechnicianAssignmentId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorId");
+
+                    b.HasIndex("TechnicianAssignmentId", "Id");
+
+                    b.ToTable("VisitEvents");
+                });
+
             modelBuilder.Entity("ServiceDesk.Domain.Entities.Asset", b =>
                 {
                     b.HasOne("ServiceDesk.Domain.Entities.Store", null)
                         .WithMany()
                         .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.Notification", b =>
+                {
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RecipientId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("SupportTicketId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -433,9 +659,44 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ConfirmedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ServiceDesk.Domain.Entities.ExternalTechnician", null)
                         .WithMany()
                         .HasForeignKey("ExternalTechnicianId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("SupportTicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketAttachment", b =>
+                {
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("SupportTicketId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TicketComment", b =>
+                {
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -477,6 +738,26 @@ namespace ServiceDesk.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("StoreId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.VisitEvent", b =>
+                {
+                    b.HasOne("ServiceDesk.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ServiceDesk.Domain.Entities.TechnicianAssignment", null)
+                        .WithMany("VisitEvents")
+                        .HasForeignKey("TechnicianAssignmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ServiceDesk.Domain.Entities.TechnicianAssignment", b =>
+                {
+                    b.Navigation("VisitEvents");
                 });
 #pragma warning restore 612, 618
         }

@@ -56,7 +56,11 @@ public class AdministrationTests
         // An inactive store can still finish an existing ticket.
         var tickets = new TicketService(new SupportTicketRepository(context), new TechnicianAssignmentRepository(context), new TicketStatusHistoryRepository(context), new Infrastructure.Transactions.WorkflowTransaction(context));
         await tickets.AssignTicketAsync(ticket.Id, 1, 1, DateTime.UtcNow.AddDays(1), "Visit", 1, null);
-        await tickets.StartProgressTicketAsync(ticket.Id, 1, null);
+        var visit = (await tickets.GetLatestAssignmentAsync(ticket.Id))!;
+        var current = (await tickets.GetTicketByIdAsync(ticket.Id))!;
+        await tickets.ChangeVisitAsync(ticket.Id, 1, "confirm", current.Version, visit.Version, "Store contact", "12345678");
+        visit = (await tickets.GetLatestAssignmentAsync(ticket.Id))!;
+        await tickets.StartProgressTicketAsync(ticket.Id, 1, null, current.Version, visit.Version);
         await tickets.ResolveTicketAsync(ticket.Id, 1, null);
         await tickets.CloseTicketAsync(ticket.Id, 1, null);
         await service.SetStoreActiveAsync(database.StoreId, true);

@@ -43,6 +43,7 @@ public class SecurityApiTests : IDisposable
     {
         var json = JsonSerializer.SerializeToNode(body)!.AsObject();
         if (path.StartsWith("/api/tickets/") && !json.ContainsKey("expectedVersion")) json["expectedVersion"] = Convert.ToBase64String(new byte[8]);
+        if ((path.EndsWith("/progress") || path.Contains("/visit/")) && !json.ContainsKey("expectedAssignmentVersion")) json["expectedAssignmentVersion"] = Convert.ToBase64String(new byte[8]);
         return _client.SendAsync(new HttpRequestMessage(method, path) { Content = JsonContent.Create(json) });
     }
 
@@ -164,6 +165,9 @@ public class SecurityApiTests : IDisposable
     [InlineData("POST", "/api/tickets/1/approve")]
     [InlineData("POST", "/api/tickets/1/reject")]
     [InlineData("POST", "/api/tickets/1/assign")]
+    [InlineData("POST", "/api/tickets/1/visit/confirm")]
+    [InlineData("POST", "/api/tickets/1/visit/decline")]
+    [InlineData("POST", "/api/tickets/1/visit/reschedule")]
     [InlineData("POST", "/api/tickets/1/progress")]
     [InlineData("POST", "/api/tickets/1/resolve")]
     [InlineData("POST", "/api/tickets/1/close")]
@@ -204,7 +208,7 @@ public class SecurityApiTests : IDisposable
     {
         var session = await SignIn("manager@example.test");
         Assert.Equal(1, session.User.StoreId);
-        var tickets = await _client.GetFromJsonAsync<JsonElement[]>("/api/tickets");
+        var tickets = (await _client.GetFromJsonAsync<JsonElement>("/api/tickets")).GetProperty("items").EnumerateArray().ToArray();
         Assert.NotEmpty(tickets!);
         Assert.All(tickets!, ticket => Assert.Equal(1, ticket.GetProperty("storeId").GetInt32()));
         var stores = await _client.GetFromJsonAsync<JsonElement[]>("/api/stores");
@@ -237,7 +241,10 @@ public class SecurityApiTests : IDisposable
     public async Task Manager_can_progress_and_resolve_own_store_only_with_trusted_actor()
     {
         foreach (var ticket in _api.Data.Tickets) { ticket.Approve(); ticket.Assign(); }
+        var assignment = new TechnicianAssignment(1, 1, 11, DateTime.UtcNow.AddDays(1), "Visit");
+        await _api.Data.AddAsync(assignment);
         await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/visit/confirm", new { contactName = "Store contact", contactPhone = "12345678" })).StatusCode);
         foreach (var action in new[] { "progress", "resolve" })
         {
             Assert.Equal(HttpStatusCode.NotFound, (await PostAsync($"/api/tickets/2/{action}", new { })).StatusCode);
@@ -341,7 +348,7 @@ public class SecurityApiTests : IDisposable
     {
         await SignIn();
         Assert.Equal(2, (await _client.GetFromJsonAsync<JsonElement[]>("/api/stores"))!.Length);
-        Assert.Equal(2, (await _client.GetFromJsonAsync<JsonElement[]>("/api/tickets"))!.Length);
+        Assert.Equal(2, (await _client.GetFromJsonAsync<JsonElement>("/api/tickets")).GetProperty("items").GetArrayLength());
         var response = await PostAsync("/api/tickets/1/approve", new { reason = "Approved", changedByUserId = 999 });
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(11, Assert.Single(_api.Data.History).ChangedByUserId);
@@ -390,12 +397,57 @@ public class SecurityApiTests : IDisposable
     }
 
     [Fact]
+    public async Task Visit_permissions_validation_and_confirmation_gate_are_enforced_by_server()
+    {
+        await SignIn();
+        await PostAsync("/api/tickets/1/approve", new { });
+        await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(1), notes = "Visit" });
+        Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync("/api/tickets/1/visit/confirm", new { contactName = "Contact", contactPhone = "123" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync("/api/tickets/1/visit/decline", new { reason = "No" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/progress", new { })).StatusCode);
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.Forbidden, (await PostAsync("/api/tickets/1/visit/reschedule", new { scheduledAt = DateTimeOffset.UtcNow.AddDays(2) })).StatusCode);
+        foreach (var action in new[] { "confirm", "decline" })
+        {
+            Assert.Equal(HttpStatusCode.NotFound, (await PostAsync($"/api/tickets/2/visit/{action}", new { })).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await PostAsync($"/api/tickets/999/visit/{action}", new { })).StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/visit/confirm", new { contactName = " ", contactPhone = "123" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/visit/decline", new { reason = " " })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/visit/confirm", new { expectedAssignmentVersion = "", contactName = "Contact", contactPhone = "123" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/visit/confirm", new { expectedAssignmentVersion = "AQEBAQEBAQE=", contactName = "Contact", contactPhone = "123" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/visit/decline", new { reason = "Store closed then" })).StatusCode);
+        var declinedDetail = await _client.GetFromJsonAsync<JsonElement>("/api/tickets/1");
+        Assert.Equal("Declined", declinedDetail.GetProperty("visitState").GetString());
+        var declinedList = await _client.GetFromJsonAsync<JsonElement>("/api/tickets");
+        Assert.Equal("Declined", declinedList.GetProperty("items")[0].GetProperty("visitState").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/progress", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/visit/confirm", new { contactName = "Contact", contactPhone = "123" })).StatusCode);
+        await SignIn();
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/visit/reschedule", new { scheduledAt = DateTimeOffset.UtcNow.AddDays(-1) })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/visit/reschedule", new { scheduledAt = DateTimeOffset.UtcNow.AddDays(2) })).StatusCode);
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/visit/confirm", new { contactName = " Contact ", contactPhone = " 123 ", confirmedByUserId = 999 })).StatusCode);
+        var assignment = Assert.Single(_api.Data.Assignments);
+        Assert.Equal(21, assignment.ConfirmedByUserId);
+        Assert.Equal("Contact", assignment.ContactName);
+        await SignIn();
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/visit/reschedule", new { scheduledAt = DateTimeOffset.UtcNow.AddDays(3) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/progress", new { })).StatusCode);
+        Assert.Equal("AwaitingConfirmation", assignment.VisitState);
+        Assert.Null(assignment.ContactName);
+        Assert.Equal(2, _api.Data.History.Count);
+        Assert.Equal(4, assignment.VisitEvents.Count);
+    }
+
+    [Fact]
     public async Task Api_can_complete_full_workflow_with_admin_and_manager_audit_actors()
     {
         await SignIn();
         Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/approve", new { reason = "Valid request" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/assign", new { externalTechnicianId = 1, scheduledAt = DateTimeOffset.UtcNow.AddDays(1), notes = "Visit" })).StatusCode);
         await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/visit/confirm", new { contactName = "Store contact", contactPhone = "12345678" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/progress", new { reason = "Work started" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/tickets/1/resolve", new { reason = "Repaired" })).StatusCode);
         await SignIn();
@@ -472,6 +524,14 @@ public class SecurityApiTests : IDisposable
                 services.RemoveAll<IReferenceDataRepository>();
                 services.RemoveAll<ITicketStatusHistoryRepository>();
                 services.RemoveAll<ITechnicianAssignmentRepository>();
+                services.RemoveAll<INotificationPublisher>();
+                services.AddSingleton<INotificationPublisher, NoNotifications>();
+                services.RemoveAll<ITicketQueryRepository>();
+                services.AddSingleton<ITicketQueryRepository>(Data);
+                services.RemoveAll<IDiscussionRepository>();
+                services.AddSingleton<IDiscussionRepository>(Data);
+                services.RemoveAll<IAccountRepository>();
+                services.AddSingleton<IAccountRepository>(Data);
                 services.AddSingleton<IUserRepository>(Data);
                 services.RemoveAll<IWorkflowTransaction>();
                 services.AddSingleton<IWorkflowTransaction, FakeWorkflowTransaction>();
@@ -485,6 +545,106 @@ public class SecurityApiTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Discussion_enforces_scope_authorship_validation_and_terminal_read_only()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.GetAsync("/api/tickets/1/comments")).StatusCode);
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync("/api/tickets/2/comments", new { text = "Other store" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/comments", new { text = " " })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/tickets/1/comments", new { text = new string('x', 2001) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await PostAsync("/api/tickets/1/comments", new { text = " <script>alert(1)</script> ", authorId = 11 })).StatusCode);
+        var comment = Assert.Single(_api.Data.Comments);
+        Assert.Equal(21, comment.AuthorId); Assert.Equal("<script>alert(1)</script>", comment.Text);
+        Assert.Empty(_api.Data.History);
+        var page = await _client.GetFromJsonAsync<JsonElement>("/api/tickets/1/comments");
+        Assert.Equal(1, page.GetProperty("items").GetArrayLength());
+        _api.Data.Tickets[0].Reject();
+        Assert.Equal(HttpStatusCode.Conflict, (await PostAsync("/api/tickets/1/comments", new { text = "After rejection" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/tickets/1/comments")).StatusCode);
+        Assert.Single(_api.Data.Comments);
+    }
+
+    [Fact]
+    public async Task Ticket_queries_validate_boundaries_and_dashboard_uses_authorized_scope()
+    {
+        await SignIn("manager@example.test");
+        foreach (var query in new[] { "page=0", "pageSize=101", "status=99", "priority=0", "page=2147483647&pageSize=100" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await _client.GetAsync("/api/tickets?" + query)).StatusCode);
+        var page = await _client.GetFromJsonAsync<JsonElement>("/api/tickets?title=ISSUE&status=1&priority=2&pageSize=1");
+        Assert.Equal(1, page.GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, page.GetProperty("items")[0].GetProperty("storeId").GetInt32());
+        var dashboard = await _client.GetFromJsonAsync<JsonElement>("/api/dashboard");
+        Assert.Equal(1, dashboard.GetProperty("summary").GetProperty("total").GetInt32());
+        Assert.Equal(1, dashboard.GetProperty("recent").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Profile_is_authenticated_scoped_and_cannot_change_access_or_credentials()
+    {
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.GetAsync("/api/account")).StatusCode);
+        await SignIn("manager@example.test");
+        var profile = await _client.GetFromJsonAsync<JsonElement>("/api/account");
+        Assert.Equal(21, profile.GetProperty("id").GetInt32());
+        Assert.False(profile.TryGetProperty("passwordHash", out _));
+        var version = profile.GetProperty("version").GetString();
+        Assert.Equal(HttpStatusCode.Conflict, (await PutAsync("/api/account/profile", new { firstName = "New", lastName = "Name", phoneNumber = "123", expectedVersion = "AQEBAQEBAQE=" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PutAsync("/api/account/profile", new { firstName = " ", lastName = "Name", phoneNumber = "123", expectedVersion = version })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await PutAsync("/api/account/profile", new { firstName = new string('x', 101), lastName = "Name", phoneNumber = "123", expectedVersion = version })).StatusCode);
+        var saved = await PutAsync("/api/account/profile", new { id = 11, firstName = " New ", lastName = " Name ", phoneNumber = " 123 ", expectedVersion = version, role = "Admin", storeId = 2, email = "stolen@example.test" });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        var result = await saved.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("New", result.GetProperty("firstName").GetString());
+        Assert.Equal("123", result.GetProperty("phoneNumber").GetString());
+        Assert.Equal("manager@example.test", result.GetProperty("email").GetString());
+        Assert.Equal("StoreManager", result.GetProperty("role").GetString());
+        Assert.Equal(1, result.GetProperty("storeId").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/tickets")).StatusCode);
+        var read = await _client.GetFromJsonAsync<JsonElement>("/api/account");
+        Assert.Equal("New", read.GetProperty("firstName").GetString());
+    }
+
+    [Fact]
+    public async Task Dashboard_attention_is_role_scoped_and_excludes_terminal_work()
+    {
+        await SignIn();
+        var admin = await _client.GetFromJsonAsync<JsonElement>("/api/dashboard");
+        Assert.Equal(2, admin.GetProperty("attention").GetArrayLength());
+        Assert.All(admin.GetProperty("attention").EnumerateArray(), item => Assert.Equal("Review request", item.GetProperty("action").GetString()));
+        await SignIn("manager@example.test");
+        var manager = await _client.GetFromJsonAsync<JsonElement>("/api/dashboard");
+        Assert.Empty(manager.GetProperty("attention").EnumerateArray());
+        _api.Data.Tickets[0].Reject();
+        await SignIn();
+        var updated = await _client.GetFromJsonAsync<JsonElement>("/api/dashboard");
+        Assert.Single(updated.GetProperty("attention").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Password_change_checks_current_password_and_invalidates_old_tokens()
+    {
+        await SignIn("manager@example.test");
+        Assert.Equal(HttpStatusCode.BadRequest, (await PostAsync("/api/account/change-password", new { currentPassword = "wrong", newPassword = "New-Test-Pass8!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await PostAsync("/api/account/change-password", new { currentPassword = TestApi.Password, newPassword = "New-Test-Pass8!", userId = 11 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _client.GetAsync("/api/tickets")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await PostAsync("/api/auth/login", new { email = "manager@example.test", password = TestApi.Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync("/api/auth/login", new { email = "manager@example.test", password = "New-Test-Pass8!" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync("/api/auth/login", new { email = "admin@example.test", password = TestApi.Password })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Health_is_public_and_unknown_api_routes_are_not_spa_pages()
+    {
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/health/live")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/does-not-exist")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/assets/missing.js")).StatusCode);
+    }
+
+    private sealed class NoNotifications : INotificationPublisher
+    {
+        public Task PublishAsync(SupportTicket ticket, int actor, string eventKey, string kind) => Task.CompletedTask;
+    }
+
     private sealed class TestDisplayNames : IDisplayNameRepository
     {
         public Task<DisplayNames> GetAsync(int[] stores, int[] categories, int[] users, int[] technicians) => Task.FromResult(new DisplayNames(
@@ -492,9 +652,32 @@ public class SecurityApiTests : IDisposable
             users.ToDictionary(id => id, id => $"User {id}"), technicians.ToDictionary(id => id, id => $"Technician {id}")));
     }
 
-    private sealed class TestData : IUserRepository, ISupportTicketRepository, IReferenceDataRepository,
+    private sealed class TestData : IUserRepository, ISupportTicketRepository, IReferenceDataRepository, ITicketQueryRepository, IDiscussionRepository, IAccountRepository,
         ITicketStatusHistoryRepository, ITechnicianAssignmentRepository
     {
+        public List<TicketComment> Comments { get; } = [];
+        public Task<List<TicketComment>> GetAsync(int ticketId, int? beforeId) => Task.FromResult(Comments.Where(c => c.SupportTicketId == ticketId && (!beforeId.HasValue || c.Id < beforeId)).OrderByDescending(c => c.Id).Take(26).ToList());
+        public Task AddAsync(TicketComment comment) { SetId(comment, Comments.Count + 1); Comments.Add(comment); return Task.CompletedTask; }
+        public Task<User?> GetTrackedAsync(int id) => ((IUserRepository)this).GetByIdAsync(id);
+        public Task SaveAsync() => Task.CompletedTask;
+        public async Task<TicketPage> SearchAsync(int? storeId, TicketQuery query)
+        {
+            query.Validate();
+            var rows = (await GetAllAsync(storeId)).Where(t => string.IsNullOrWhiteSpace(query.Title) || t.Title.Contains(query.Title.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Where(t => !query.OpenOnly || t.Status is TicketStatus.AwaitingApproval or TicketStatus.Approved or TicketStatus.Assigned)
+                .Where(t => !query.Status.HasValue || t.Status == query.Status).Where(t => !query.Priority.HasValue || t.Priority == query.Priority)
+                .OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id).ToList();
+            return new(rows.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToList(), rows.Count, query.Page, query.PageSize);
+        }
+        public Task<Dictionary<int, string?>> GetVisitStatesAsync(int[] ticketIds) => Task.FromResult(ticketIds.Distinct()
+            .ToDictionary(id => id, id => Assignments.Where(a => a.SupportTicketId == id && a.WithdrawnAt == null)
+                .OrderByDescending(a => a.AssignedAt).ThenByDescending(a => a.Id).Select(a => (string?)a.VisitState).FirstOrDefault()));
+        public async Task<TicketDashboard> DashboardAsync(int? storeId)
+        {
+            var rows = await GetAllAsync(storeId);
+            return new(new(rows.Count, rows.Count(t => (int)t.Status <= 3), rows.Count(t => (int)t.Status == 4), rows.Count(t => (int)t.Status == 5)), rows.OrderByDescending(t => t.CreatedAt).ThenByDescending(t => t.Id).Take(5).ToList(),
+                rows.Where(t => storeId.HasValue ? t.Status is TicketStatus.Assigned or TicketStatus.InProgress : t.Status is TicketStatus.AwaitingApproval or TicketStatus.Approved or TicketStatus.Resolved).OrderByDescending(t => t.Priority).ThenBy(t => t.CreatedAt).Take(8).ToList());
+        }
         public bool ThrowOnList { get; set; }
         public List<SupportTicket> Tickets { get; } = [MakeTicket(1, 1), MakeTicket(2, 2)];
         public List<TicketStatusHistory> History { get; } = [];
@@ -524,7 +707,7 @@ public class SecurityApiTests : IDisposable
         public Task AddAsync(SupportTicket ticket) { SetId(ticket, Tickets.Count + 1); Tickets.Add(ticket); return Task.CompletedTask; }
         public Task AddAsync(TicketStatusHistory history) { History.Add(history); return Task.CompletedTask; }
         public Task AddAsync(TechnicianAssignment assignment) { SetId(assignment, Assignments.Count + 1); Assignments.Add(assignment); return Task.CompletedTask; }
-        public Task<TechnicianAssignment?> GetLatestByTicketIdAsync(int ticketId) => Task.FromResult(Assignments.LastOrDefault(item => item.SupportTicketId == ticketId));
+        public Task<TechnicianAssignment?> GetLatestByTicketIdAsync(int ticketId) => Task.FromResult(Assignments.LastOrDefault(item => item.SupportTicketId == ticketId && item.WithdrawnAt == null));
         public Task<List<TicketStatusHistory>> GetByTicketId(int id) => Task.FromResult(History.Where(item => item.SupportTicketId == id).ToList());
         public Task<List<Store>> GetStoreAsync()
         {

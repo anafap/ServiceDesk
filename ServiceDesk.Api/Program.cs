@@ -18,6 +18,12 @@ using ServiceDesk.Api.Endpoints;
 using Microsoft.OpenApi;
 
 
+if (args.Length == 3 && args[0] == "--sanitize-photo")
+{
+    try { ServiceDesk.Infrastructure.Photos.PhotoSanitizer.Process(args[1], args[2]); }
+    catch { Environment.ExitCode = 1; }
+    return;
+}
 var builder = WebApplication.CreateBuilder(args);
 var browserTests = ServiceDesk.Api.Development.BrowserTestDatabase.Configure(builder, args);
 builder.Services.AddEndpointsApiExplorer();
@@ -28,6 +34,9 @@ builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(opt
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = 429;
+    options.AddPolicy("photos", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst("sub")?.Value ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         {
@@ -68,7 +77,23 @@ builder.Services.AddScoped<AdministrationService>();
 builder.Services.AddScoped<IManagerRepository, ManagerRepository>();
 builder.Services.AddScoped<ManagerService>();
 builder.Services.AddScoped<IDisplayNameRepository, DisplayNameRepository>();
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options => options.MultipartBodyLengthLimit = 6 * 1024 * 1024);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 6 * 1024 * 1024);
+builder.Services.AddScoped<IAttachmentRepository, AttachmentRepository>();
+builder.Services.AddScoped<AttachmentService>();
+builder.Services.AddSingleton<IPhotoStorage>(_ => new ServiceDesk.Infrastructure.Photos.LocalPhotoStorage(
+    builder.Configuration["Photos:Root"] ?? Path.Combine(builder.Environment.ContentRootPath, ".servicedesk-photos")));
+builder.Services.AddSingleton<IPhotoScanner>(_ => new ServiceDesk.Infrastructure.Photos.ClamAvScanner(
+    builder.Configuration["Photos:ScannerHost"] ?? "127.0.0.1", builder.Configuration.GetValue("Photos:ScannerPort", 3310)));
+builder.Services.AddSingleton<ServiceDesk.Api.Photos.PhotoWorker>();
 builder.Services.AddScoped<TicketService>();
+builder.Services.AddScoped<ITicketQueryRepository, TicketQueryRepository>();
+builder.Services.AddScoped<IDiscussionRepository, DiscussionRepository>();
+builder.Services.AddScoped<DiscussionService>();
+builder.Services.AddScoped<IAccountRepository, AccountRepository>();
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<INotificationPublisher, NotificationRepository>();
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
 builder.Services.AddScoped<ReferenceService>();
 
 builder.Services.AddScoped<LoginService>();
@@ -127,7 +152,39 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", policy => policy.RequireRole(nameof(UserRole.Admin)));
 });
 
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Clear(); options.KnownIPNetworks.Clear();
+    foreach (var proxy in builder.Configuration.GetSection("Hosting:TrustedProxies").Get<string[]>() ?? [])
+        options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+});
 var app = builder.Build();
+if (args.Contains("--provision-admin"))
+{
+    await ServiceDesk.Api.Development.AdminProvisioner.RunAsync(app.Services, app.Configuration);
+    Console.WriteLine("Admin provisioning completed. Existing credentials were not reset.");
+    return;
+}
+if (args.Contains("--provision-demo"))
+{
+    if (!app.Configuration.GetValue("Hosting:DemoInstance", false)) throw new InvalidOperationException("Explicit demo provisioning requires Hosting:DemoInstance=true on an isolated demo database.");
+    await ServiceDesk.Api.Development.DemoDataSeeder.SeedAsync(app.Services, app.Configuration);
+    return;
+}
+if (args.Contains("--photo-worker"))
+{
+    using var stopping = new CancellationTokenSource();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stopping.Cancel(); };
+    System.Runtime.InteropServices.PosixSignalRegistration? signal = null;
+    if (!OperatingSystem.IsWindows()) signal = System.Runtime.InteropServices.PosixSignalRegistration.Create(
+        System.Runtime.InteropServices.PosixSignal.SIGTERM, context => { context.Cancel = true; stopping.Cancel(); });
+    try { await app.Services.GetRequiredService<ServiceDesk.Api.Photos.PhotoWorker>().RunAsync(stopping.Token); }
+    catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+    finally { signal?.Dispose(); }
+    return;
+}
 if (args.Contains("--cleanup-browser-tests"))
 {
     await ServiceDesk.Api.Development.BrowserTestDatabase.DeleteAsync(app.Services);
@@ -184,8 +241,16 @@ app.UseStatusCodePages(async context =>
     await Results.Problem(statusCode: response.StatusCode, title: "Request rejected",
         extensions: new Dictionary<string, object?> { ["traceId"] = context.HttpContext.TraceIdentifier }).ExecuteAsync(context.HttpContext);
 });
-app.UseRateLimiter();
+if ((app.Configuration.GetSection("Hosting:TrustedProxies").Get<string[]>() ?? []).Length > 0) app.UseForwardedHeaders();
+if (app.Environment.IsProduction())
+{
+    app.UseHsts();
+    if (app.Configuration.GetValue("Hosting:RequireHttps", true)) app.UseHttpsRedirection();
+}
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapPost("/api/auth/login", async (LoginRequest request, LoginService login, JwtTokenService tokens, HttpResponse response, IDisplayNameRepository display) =>
@@ -200,8 +265,33 @@ app.MapPost("/api/auth/login", async (LoginRequest request, LoginService login, 
 }).AllowAnonymous().RequireRateLimiting("login");
 
 app.MapServiceDeskEndpoints();
+app.MapDiscussionEndpoints();
+app.MapNotificationEndpoints();
+app.MapAccountEndpoints();
+app.MapAttachmentEndpoints();
 app.MapAdministrationEndpoints();
 app.MapManagerEndpoints();
+app.MapGet("/health/live", () => Results.Ok(new { status = "alive" })).AllowAnonymous();
+app.MapGet("/health/ready", async (ServiceDeskDbContext db) =>
+{
+    try
+    {
+        if (await db.Database.CanConnectAsync() && !(await db.Database.GetPendingMigrationsAsync()).Any())
+            return Results.Ok(new { status = "ready" });
+    }
+    catch { }
+    return Results.StatusCode(503);
+}).AllowAnonymous();
+app.MapFallback("/{**path}", async context =>
+{
+    if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/health") ||
+        Path.HasExtension(context.Request.Path.Value)) { context.Response.StatusCode = 404; return; }
+    var index = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"), "index.html");
+    if (!File.Exists(index)) { context.Response.StatusCode = 404; return; }
+    context.Response.ContentType = "text/html";
+    context.Response.Headers.CacheControl = "no-cache";
+    await context.Response.SendFileAsync(index);
+}).AllowAnonymous();
 app.Run();
 
 public record LoginRequest(string Email, string Password);

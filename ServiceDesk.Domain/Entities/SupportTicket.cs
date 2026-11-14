@@ -13,6 +13,14 @@ public class SupportTicket : VersionedEntity
     public int CreatedByUserId { get; private set; }
     public int CategoryId { get; private set; }
     public int StoreId { get; private set; }
+    public DateTime? LastDiscussionAt { get; private set; }
+    public void RecordDiscussionActivity()
+    {
+        if (Status is TicketStatus.Closed or TicketStatus.Rejected)
+            throw new StateConflictException("Discussion is read-only for closed or rejected tickets.");
+        LastDiscussionAt = DateTime.UtcNow;
+    }
+
     public int? AssetId { get; private set; }
 
 
@@ -94,6 +102,14 @@ public class SupportTicket : VersionedEntity
         }
 
         Status = TicketStatus.Assigned;
+    }
+    // Advances the ticket rowversion for visit decisions as well as status changes.
+    public int VisitRevision { get; private set; }
+    public void RecordVisitChange()
+    {
+        if (Status != TicketStatus.Assigned)
+            throw new StateConflictException("Visit arrangements can only change while the ticket is Assigned.");
+        VisitRevision++;
     }
     public void StartProgress()
     {

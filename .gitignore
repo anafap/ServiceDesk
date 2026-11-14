@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 # Browser test reports and transient artifacts
 frontend/playwright-report/
 frontend/test-results/
+
+# Private quarantined and processed photos
+.servicedesk-photos/

@@ -76,6 +76,17 @@ public class User : VersionedEntity
         Email = normalized; NormalizedEmail = normalized.ToUpperInvariant(); StoreId = storeId;
     }
 
+    public void UpdateProfile(string firstName, string lastName, string phoneNumber)
+    {
+        if (string.IsNullOrWhiteSpace(firstName) || firstName.Trim().Length > 100
+            || string.IsNullOrWhiteSpace(lastName) || lastName.Trim().Length > 100
+            || string.IsNullOrWhiteSpace(phoneNumber) || phoneNumber.Trim().Length > 50)
+            throw new ArgumentException("First name, last name, and phone number are required and must fit their limits.");
+        FirstName = firstName.Trim();
+        LastName = lastName.Trim();
+        PhoneNumber = phoneNumber.Trim();
+    }
+
     public void SetActive(bool active)
     {
         if (IsActive == active) return;

@@ -258,7 +258,10 @@ public class TicketServiceTests
 
         var service = new TicketService(repository, assignmentRepository, historyRepository, new FakeWorkflowTransaction());
 
-        await service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
+        if (assignmentRepository.AddedAssignment is null)
+            await assignmentRepository.AddAsync(new TechnicianAssignment(1, 2, 3, DateTime.UtcNow.AddDays(1), "Visit"));
+        assignmentRepository.AddedAssignment!.ConfirmVisit("Store contact", "12345678", 1);
+        await service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: "", expectedAssignmentVersion: assignmentRepository.AddedAssignment.Version);
 
         Assert.Equal(TicketStatus.InProgress, ticket.Status);
         Assert.True(repository.WasSaved);
@@ -442,7 +445,10 @@ public class TicketServiceTests
             changedByUserId: 1,
             reason: "");
 
-        await service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
+        if (assignmentRepository.AddedAssignment is null)
+            await assignmentRepository.AddAsync(new TechnicianAssignment(1, 2, 3, DateTime.UtcNow.AddDays(1), "Visit"));
+        assignmentRepository.AddedAssignment!.ConfirmVisit("Store contact", "12345678", 1);
+        await service.StartProgressTicketAsync(ticketId: 1, changedByUserId: 1, reason: "", expectedAssignmentVersion: assignmentRepository.AddedAssignment.Version);
         await service.ResolveTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
         await service.CloseTicketAsync(ticketId: 1, changedByUserId: 1, reason: "");
 
@@ -543,7 +549,7 @@ public class TicketServiceTests
             Task.FromResult(AddedAssignment?.SupportTicketId == ticketId ? AddedAssignment : null);
         public TechnicianAssignment? AddedAssignment { get; private set; }
 
-        public Task<TechnicianAssignment?> GetByIdAsync(int id) => Task.FromResult<TechnicianAssignment?>(null);
+        public Task<TechnicianAssignment?> GetByIdAsync(int id) => Task.FromResult(AddedAssignment);
         public Task SaveAsync(TechnicianAssignment assignment) => Task.CompletedTask;
 
         public Task AddAsync(TechnicianAssignment assignment)

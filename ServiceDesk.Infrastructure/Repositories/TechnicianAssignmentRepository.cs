@@ -19,7 +19,7 @@ public class TechnicianAssignmentRepository : ITechnicianAssignmentRepository
 
     }
 
-    public Task<TechnicianAssignment?> GetByIdAsync(int id) => _dbContext.TechnicianAssignments.SingleOrDefaultAsync(item => item.Id == id);
+    public Task<TechnicianAssignment?> GetByIdAsync(int id) => _dbContext.TechnicianAssignments.Include(a => a.VisitEvents).SingleOrDefaultAsync(item => item.Id == id);
     public async Task SaveAsync(TechnicianAssignment assignment) => await _dbContext.SaveChangesAsync();
 
     public async Task AddAsync(TechnicianAssignment technicianAssignment)

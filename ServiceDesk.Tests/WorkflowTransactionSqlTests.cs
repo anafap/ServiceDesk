@@ -25,6 +25,13 @@ public sealed class WorkflowTransactionSqlTests
         await using var database = await TestDatabase.CreateAsync();
         await using var context = database.OpenContext();
         var ticket = await database.AddTicketAsync(context, previous);
+        if (next == TicketStatus.InProgress)
+        {
+            var visit = new TechnicianAssignment(ticket.Id, 1, 1, DateTime.UtcNow.AddDays(1), "Visit");
+            context.Add(visit); await context.SaveChangesAsync();
+            visit.ConfirmVisit("Store contact", "12345678", 1);
+            await context.SaveChangesAsync(); context.ChangeTracker.Clear();
+        }
         // Force a real SQL failure after the earlier ticket/assignment writes succeed.
         await context.Database.ExecuteSqlRawAsync("ALTER TABLE [TicketStatusHistories] ADD CONSTRAINT [CK_Test_HistoryFailure] CHECK ([ChangedByUserId] <> 9999)");
         var service = MakeService(context);
@@ -35,7 +42,7 @@ public sealed class WorkflowTransactionSqlTests
         {
             Assert.Equal(previous, (await verification.SupportTickets.SingleAsync()).Status);
             Assert.Empty(await verification.TicketStatusHistories.ToListAsync());
-            Assert.Empty(await verification.TechnicianAssignments.ToListAsync());
+            Assert.Equal(next == TicketStatus.InProgress ? 1 : 0, await verification.TechnicianAssignments.CountAsync());
         }
         // The request context must not return the rolled-back state from EF's tracker.
         Assert.Equal(previous, (await service.GetTicketByIdAsync(ticket.Id))!.Status);
@@ -46,7 +53,7 @@ public sealed class WorkflowTransactionSqlTests
         Assert.Equal(previous, history.PreviousStatus);
         Assert.Equal(next, history.NewStatus);
         Assert.Equal(1, history.ChangedByUserId);
-        Assert.Equal(next == TicketStatus.Assigned ? 1 : 0, await afterRetry.TechnicianAssignments.CountAsync());
+        Assert.Equal(next is TicketStatus.Assigned or TicketStatus.InProgress ? 1 : 0, await afterRetry.TechnicianAssignments.CountAsync());
     }
 
     [SqlFact]
@@ -92,7 +99,21 @@ public sealed class WorkflowTransactionSqlTests
         new SupportTicketRepository(context), new TechnicianAssignmentRepository(context),
         new TicketStatusHistoryRepository(context), new WorkflowTransaction(context));
 
-    private static Task Transition(TicketService service, int id, TicketStatus next, int actor) => next switch
+    private static async Task Transition(TicketService service, int id, TicketStatus next, int actor)
+    {
+        if (next == TicketStatus.InProgress)
+        {
+            var visit = (await service.GetLatestAssignmentAsync(id))!;
+            if (visit.VisitState != "Confirmed")
+            {
+                var ticket = (await service.GetTicketByIdAsync(id))!;
+                await service.ChangeVisitAsync(id, 1, "confirm", ticket.Version, visit.Version, "Store contact", "12345678");
+                visit = (await service.GetLatestAssignmentAsync(id))!;
+            }
+            await service.StartProgressTicketAsync(id, actor, "Test", expectedAssignmentVersion: visit.Version);
+            return;
+        }
+        await (next switch
     {
         TicketStatus.Approved => service.ApproveTicketAsync(id, actor, "Test"),
         TicketStatus.Rejected => service.RejectTicketAsync(id, actor, "Test"),
@@ -101,7 +122,8 @@ public sealed class WorkflowTransactionSqlTests
         TicketStatus.Resolved => service.ResolveTicketAsync(id, actor, "Test"),
         TicketStatus.Closed => service.CloseTicketAsync(id, actor, "Test"),
         _ => throw new ArgumentOutOfRangeException(nameof(next)),
-    };
+    });
+    }
 
     internal sealed class TestDatabase : IAsyncDisposable
     {

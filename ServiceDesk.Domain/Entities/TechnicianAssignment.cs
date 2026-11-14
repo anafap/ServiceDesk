@@ -1,14 +1,14 @@
 
 namespace ServiceDesk.Domain.Entities;
 
-public class TechnicianAssignment
+public class TechnicianAssignment : VersionedEntity
 {
     // EF restores historical visits without rerunning rules for a new appointment.
     private TechnicianAssignment() { }
 
     public DateTime? WithdrawnAt { get; private set; }
-    public void Withdraw() => WithdrawnAt = DateTime.UtcNow;
-    public void Restore() => WithdrawnAt = null;
+    public void Withdraw() { ResetConfirmation(); WithdrawnAt = DateTime.UtcNow; }
+    public void Restore() { ResetConfirmation(); WithdrawnAt = null; }
 
     public int Id { get; private set; }
 
@@ -48,15 +48,80 @@ public class TechnicianAssignment
 
 
     }
-    public void Reschedule(DateTime scheduledAt)
-    {
-        if (scheduledAt < DateTime.UtcNow)
-            throw new ArgumentException(
-                "Scheduled date cannot be in the past.",
-                nameof(scheduledAt));
+    public string VisitState { get; private set; } = "AwaitingConfirmation";
+    public string? ContactName { get; private set; }
+    public string? ContactPhone { get; private set; }
+    public int? ConfirmedByUserId { get; private set; }
+    public DateTime? ConfirmedAt { get; private set; }
+    public string? DeclineReason { get; private set; }
+    public DateTime? RepairStartedAt { get; private set; }
+    private readonly List<VisitEvent> _visitEvents = [];
+    public IReadOnlyCollection<VisitEvent> VisitEvents => _visitEvents;
 
-        ScheduledAt = scheduledAt;
+    private void RequireNotStarted()
+    {
+        if (WithdrawnAt is not null || RepairStartedAt is not null)
+            throw new ServiceDesk.Domain.Exceptions.StateConflictException("This visit cannot be changed. Refresh ticket details.");
     }
 
+    public void ConfirmVisit(string name, string phone, int actor)
+    {
+        RequireNotStarted();
+        if (VisitState != "AwaitingConfirmation")
+            throw new ServiceDesk.Domain.Exceptions.StateConflictException("Ask Admin to propose a new time before confirming again.");
+        if (ScheduledAt is null || ScheduledAt <= DateTime.UtcNow)
+            throw new ArgumentException("Ask Admin to choose a future visit time.");
+        if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 100
+            || string.IsNullOrWhiteSpace(phone) || phone.Trim().Length > 50)
+            throw new ArgumentException("A contact name (up to 100 characters) and phone (up to 50 characters) are required.");
+        ContactName = name.Trim(); ContactPhone = phone.Trim();
+        ConfirmedByUserId = actor; ConfirmedAt = DateTime.UtcNow;
+        VisitState = "Confirmed"; DeclineReason = null;
+        RecordVisitEvent("Confirmed", actor);
+    }
 
+    public void DeclineVisit(string reason, int actor)
+    {
+        RequireNotStarted();
+        if (VisitState != "AwaitingConfirmation")
+            throw new ServiceDesk.Domain.Exceptions.StateConflictException("Only an awaiting-confirmation visit can be declined.");
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 2000)
+            throw new ArgumentException("A decline reason of up to 2,000 characters is required.");
+        ResetConfirmation(); VisitState = "Declined"; DeclineReason = reason.Trim();
+        RecordVisitEvent("Declined", actor);
+    }
+
+    public void Reschedule(DateTime scheduledAt, int actor)
+    {
+        RequireNotStarted();
+        if (scheduledAt <= DateTime.UtcNow) throw new ArgumentException("Choose a future visit time.");
+        if (scheduledAt == ScheduledAt)
+            throw new ArgumentException("Choose a different visit time.");
+        ScheduledAt = scheduledAt; ResetConfirmation();
+        RecordVisitEvent("Rescheduled", actor);
+    }
+
+    public void StartRepair(int actor)
+    {
+        RequireNotStarted();
+        if (VisitState != "Confirmed" || ConfirmedByUserId is null || string.IsNullOrWhiteSpace(ContactName) || string.IsNullOrWhiteSpace(ContactPhone))
+            throw new ServiceDesk.Domain.Exceptions.StateConflictException("The store manager must confirm the visit and contact person before repair starts.");
+        RepairStartedAt = DateTime.UtcNow;
+        RecordVisitEvent("RepairStarted", actor);
+    }
+
+    public void ResetVisit(int actor)
+    {
+        ResetConfirmation(); RepairStartedAt = null;
+        RecordVisitEvent("ConfirmationReset", actor);
+    }
+
+    private void ResetConfirmation()
+    {
+        VisitState = "AwaitingConfirmation"; ContactName = null; ContactPhone = null;
+        ConfirmedByUserId = null; ConfirmedAt = null; DeclineReason = null;
+    }
+
+    private void RecordVisitEvent(string kind, int actor) =>
+        _visitEvents.Add(new VisitEvent(Id, kind, actor, ScheduledAt, ContactName, ContactPhone, DeclineReason));
 }
