@@ -1,0 +1,17 @@
+# Local photo-processing companion; uses your configured local SQL connection.
+# Keep this environment separate from any business deployment.
+services:
+  scanner:
+    image: clamav/clamav:stable
+    ports:
+      - "127.0.0.1:3310:3310"
+    environment:
+      TZ: UTC
+    volumes:
+      - clam-signatures:/var/lib/clamav
+      - ./deployment/clamd.conf:/etc/clamav/clamd.conf:ro
+    mem_limit: 2g
+    cpus: 1
+    restart: unless-stopped
+volumes:
+  clam-signatures:

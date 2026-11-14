@@ -1,0 +1,15 @@
+.git
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/.env*
+**/*.local.md
+**/.servicedesk-photos
+**/test-results
+**/playwright-report
+.codex
+.agents
+.aws
+.vscode
+.idea
