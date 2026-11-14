@@ -1,0 +1,38 @@
+name: Publish demo image
+
+on:
+  workflow_dispatch:
+
+permissions:
+        contents: read
+        packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/anafap/servicedesk-demo
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Sign in Github Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN}}
+        run: |
+          printf '%s' "$GH_TOKEN" |
+            docker login ghcr.io \
+              --username "$GITHUB_ACTOR" \
+              --password-stdin
+      - name: Build application image
+        run: |
+          docker build --platform linux/amd64 \
+            --label org.opencontainers.image.source=https://github.com/anafap/ServiceDesk \
+            --tag "$IMAGE:$GITHUB_SHA" \
+            --tag "$IMAGE:demo" .
+            
+      - name: Publish image 
+        run: |
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE:demo"
+    
